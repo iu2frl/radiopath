@@ -9,6 +9,7 @@
 	import EmptyState from '$lib/EmptyState.svelte';
 	import Field from '$lib/Field.svelte';
 	import FormErrors from '$lib/FormErrors.svelte';
+	import LineChart, { type Pt } from '$lib/LineChart.svelte';
 	import { invalid, notifyError } from '$lib/notify';
 	import PageHead from '$lib/PageHead.svelte';
 
@@ -208,8 +209,38 @@
 	}
 
 	/** The circuit reliability of a point: the overall one exists only for digital modulation up to 9000 km, the basic one otherwise. */
+	function reliabilityValue(p: HFPoint): number | null {
+		const r = digitalRun && p.distance_km <= 9000 ? p.overall_reliability_pct : p.basic_reliability_pct;
+		return r === -307 ? null : r;
+	}
+
+	/** The reliability of a point as text. */
 	function reliability(p: HFPoint): string {
-		return val(digitalRun && p.distance_km <= 9000 ? p.overall_reliability_pct : p.basic_reliability_pct, 0);
+		const r = reliabilityValue(p);
+		return r == null ? '–' : r.toFixed(0);
+	}
+
+	// One colour per frequency, shared by both charts.
+	const palette = ['var(--cp-accent)', 'var(--cp-ok)', 'var(--cp-warn)', 'var(--cp-ray)', 'var(--cp-fresnel)', 'var(--cp-canopy)'];
+	const shown = $derived(points ?? []);
+	const hours = $derived([...new Set(shown.map((p) => p.hour_utc))].sort((a, b) => a - b));
+	const freqs = $derived([...new Set(shown.map((p) => p.frequency_mhz))].sort((a, b) => a - b));
+
+	/** The MUF of one kind over the hours; the MUF does not depend on the frequency, so the first point of an hour tells it. */
+	function mufOver(key: 'muf_10_mhz' | 'muf_50_mhz' | 'muf_90_mhz'): Pt[] {
+		return hours.flatMap((h) => {
+			const p = shown.find((q) => q.hour_utc === h);
+			return p && p[key] !== -307 ? [{ x: h, y: p[key] }] : [];
+		});
+	}
+
+	/** The reliability of one frequency over the hours. */
+	function reliabilityOver(f: number): Pt[] {
+		return hours.flatMap((h) => {
+			const p = shown.find((q) => q.hour_utc === h && q.frequency_mhz === f);
+			const y = p ? reliabilityValue(p) : null;
+			return y == null ? [] : [{ x: h, y }];
+		});
 	}
 </script>
 
@@ -341,6 +372,21 @@
 
 	<FormErrors {error} />
 	{#if points?.length}
+		<div class="grid gap-4 md:grid-cols-2">
+			<LineChart
+				title="MUF"
+				unit="MHz"
+				band={{ label: 'MUF exceeded on 90% to 10% of the days', color: 'var(--cp-fg)', lo: mufOver('muf_90_mhz'), hi: mufOver('muf_10_mhz') }}
+				series={[{ label: 'MUF, median', color: 'var(--cp-fg)', points: mufOver('muf_50_mhz') }]}
+				refs={freqs.map((f, i) => ({ label: `${f} MHz`, color: palette[i % palette.length], y: f }))}
+			/>
+			<LineChart
+				title="Circuit reliability"
+				unit="%"
+				yMax={100}
+				series={freqs.map((f, i) => ({ label: `${f} MHz`, color: palette[i % palette.length], points: reliabilityOver(f) }))}
+			/>
+		</div>
 		<div class="rounded-lg border bg-card">
 			<Table.Root>
 				<Table.Header>
