@@ -8,15 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-
 - Log in with the user name or the confirmed address of the account (by @HB9HIL)
 - Personal API tokens for other programs and scripts, under Account → API tokens: access per resource (none, read, read and write), an expiration date or none, shown once, revocable at any time; creating one needs the password and is mailed to the confirmed address (by @HB9HIL)
 - Log out every other device of the account under Account → Security (by @HB9HIL)
 - An interactive API reference in the app (Account → API reference), with the scope of every operation, code examples and test requests; bundled, nothing is loaded from outside (by @HB9HIL)
 - JSON API under `/api`, described by OpenAPI at `/api/openapi.json` for logged-in users; the web app is built on it, other programs can use it too (by @HB9HIL)
 - The app and the admin panel send a Content-Security-Policy: scripts only from the app itself and its own inline scripts by hash, no plugins, no framing, no connections elsewhere (by @HB9HIL)
-- HF propagation library `internal/hf`: Go port of ITU-R P.533-14 (MUF, field strength, SNR, circuit reliability) and P.372 radio noise, validated against the ITU reference implementation; reads the ITU data set from the dataset `RADIOPATH_DATASET_HF` (default `hf1`): a folder of the dataset root, or with S3 downloaded and checked by SHA-256 at startup (fetch it with `scripts/fetch-hf-data.sh`); a data set that cannot be used only turns the HF model off, the rest of the app runs and is served by `POST /api/hf/predictions`, with isotropic antennas or the user's antenna patterns (by @iu2frl)
-- HF prediction page in the app (HF in the header and the tab bar): choose two sites (or take them, the antennas and the aiming from a link), the month, hours, frequencies, antennas with their azimuth, the TX power in dBm, a mode (AM, FM, SSB, PSK31, RTTY, FT8, FT4 or custom bandwidth, required SNR and digital parameters) and the noise environment, and read MUF, field strength, SNR and reliability per hour and frequency, with charts of the MUF and the reliability over the day, and a world map of the reliability from site A with a slider for the hour (`POST /api/hf/maps`, one map at a time per server, the others wait their turn); nothing is stored (by @iu2frl)
+- HF propagation library `internal/hf`: Go port of ITU-R P.533-14 (MUF, field strength, SNR, circuit reliability) and P.372 radio noise, validated against the ITU reference implementation; reads the ITU data set from the dataset `RADIOPATH_DATASET_HF` (default `hf1`): a folder of the dataset root, or with S3 downloaded and checked by SHA-256 at startup (fetch it with `scripts/fetch-hf-data.sh`), and is served by `POST /api/hf/predictions`, with isotropic antennas or the user's antenna patterns; a data set that cannot be used only turns the HF model off, the rest of the app runs (by @iu2frl)
+- HF prediction page in the app (HF in the header and the tab bar): choose two sites (or take them, the antennas and the aiming from a link), the month, hours, frequencies, antennas with their azimuth, the TX power in dBm, a mode (AM, FM, SSB, PSK31, RTTY, FT8, FT4 or custom bandwidth, required SNR and digital parameters) and the noise environment, the short or the long path, and read MUF, field strength, SNR and reliability per hour and frequency, with charts of the MUF and the reliability over the day, and a world map of the reliability from site A with a slider for the hour (`POST /api/hf/maps`, one map at a time per server, the others wait their turn); nothing is stored (by @iu2frl)
 - `/readyz` also checks that the HF data files are still present when the HF data set is loaded (by @iu2frl)
 - API tokens can be given the `hf:read` scope for the HF predictions, maps and sunspot numbers (by @iu2frl)
 - The HF page takes one month with its hours, or several months with the hours from, to and a step; a range is one prediction per month, with a month selector for the charts and the map and the month in the table. The model has no day resolution, so no day is asked for (by @iu2frl)
@@ -44,10 +43,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The server drops requests whose headers and body take longer than 30 seconds to arrive and idle connections after two minutes (by @HB9HIL)
 
 ### Fixed
-
-- The HF C reference check builds upstream `MakeNoise.c`, which uses `errno` without including its declaration (by @HB9HIL)
-- HF integration tests now look for the dataset in the directory populated by the CI fetch step (by @HB9HIL)
-- The HF reliability map now follows the prediction's long-path setting, and duplicate hours or frequencies are rejected before results are rendered (by @iu2frl)
 - Changing the address on a server without mail configured crashed the whole server; it now answers that mail is not configured, and a mail without a mailer is only logged (by @HB9HIL)
 - Registration no longer tells whether a user name or an address is taken: it answers the same in every case, and only the mail to that address says what happened. An unconfirmed registration no longer blocks its address for others (by @HB9HIL)
 - Mails of the public account pages go out in the background, so response times no longer tell whether an address exists (by @HB9HIL)
@@ -61,14 +56,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Legend colours are parsed byte by byte, so a colour can never be truncated on its way into a raster or report (by @HB9HIL)
 
 ### Removed
-
 - The API docs page `/api/docs`, which loaded its scripts from a CDN; `/api/openapi.json` and `/api/schemas/` need a login (by @HB9HIL)
 - The `worker` field of coverage jobs and their event stream, which named the pod (by @HB9HIL)
 - `GET /api/password/reset/{token}`, replaced by `POST /api/password/reset/check` with the token in the body (by @HB9HIL)
 - The Tailwind build of the server-rendered pages (`make css`, `internal/web/ui`, the CI job `lint-css`) (by @HB9HIL)
 
 ### Chore
-
 - CI downloads the pinned, checksummed ITU data set and runs the HF model against 26 reference cases made with the original ITU C program (by @iu2frl)
 - CI job `hf-reference` rebuilds the ITU C program from its pinned sources and checks that it still writes the committed HF reference reports (by @iu2frl)
 - Prettier formats TypeScript and Svelte (`make format`), checked by `make check` and in CI (by @HB9HIL)
@@ -82,30 +75,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.2.8] - 2026-10-25
 
 ### Fixed
-
 - Release images showed the version of the preceding main build (1.2.7 showed `v1.2.5-19-g1ca860e`): every CI run now packs its own binaries instead of reusing the commit's image (by @HB9HIL)
 
 ### Chore
-
 - Renovate keeps the node image on version 26 (by @HB9HIL)
 
 ## [1.2.7] - 2026-10-25
 
 ### Changed
-
 - `make dev` starts the local stack (PostgreSQL, Valkey, Mailpit, stylesheet watcher) in Docker and the server in the foreground, with a dev user and terrain from radiopath/testfiles; `make run`, `make db-up` and `make db-down` are gone. Node only runs in Docker, the host needs Go and Docker (by @HB9HIL)
 - One CI workflow instead of two: the binaries are built once and reused for e2e, the image and the release; new checks staticcheck, govulncheck and a doc comment on every function. Images are also tagged with the commit (`:<sha>`) (by @HB9HIL)
 
 ### Fixed
-
 - Data race on the map tile cache key prefix under concurrent tile requests; the per-IP tile limit now always uses the same key (by @HB9HIL)
 
 ### Refactored
-
 - Using Playwright for e2e testing instead of Cypress, every service in its own container, on real terrain and canopy (by @HB9HIL)
 
 ### Chore
-
 - Update to Go 1.27 (by @HB9HIL)
 - Helm chart documentation moved to radiopath/helmchart (by @HB9HIL)
 - Doc comments for all functions (by @HB9HIL)
@@ -113,70 +100,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.2.6] - 2026-10-14
 
 ### Chore
-
 - Updated renovate rules to pick up all necessary versions (by @HB9HIL)
 - Dependency Updates (by @renovate)
 
 ## [1.2.5] - 2026-10-14
 
 ### Chore
-
 - Dependency Updates (by @HB9HIL)
 
 ## [1.2.4] - 2026-10-10
 
 ### Chore
-
 - Dependency Updates (by @HB9HIL)
 
 ## [1.2.3] - 2026-10-02
 
 ### Fixed
-
 - Fixed some fuzzy log messages (by @HB9HIL)
 
 ## [1.2.2] - 2026-09-28
 
 ### Chore
-
 - Dependency Updates and Pipeline fixes (by @HB9HIL)
 
 ## [1.2.1] - 2026-09-28
 
 ### Chore
-
 - Dependency Updates (by @HB9HIL)
 
 ## [1.2.0] - 2026-09-20
 
 ### Added
-
 - Added a rate limiter to the tile proxy (by @HB9HIL)
 
 ### Changed
-
 - Dev stack now runs on 9.1-alpine aswell, just as the helmchart in production. (by @HB9HIL)
 
 ## [1.1.0] - 2026-09-19
 
 ### Added
-
 - Every commit to main branch now builds a :staging image for the staging environment (by @HB9HIL)
 
 ### Changed
-
 - Sessions now expire seven days after they were last used instead of thirty days after login, with thirty days from login as a hard cap. Existing sessions are pulled into the shorter window the next time they are used. (by @HB9HIL)
 
 ### Fixed
-
 - The ci pipline was still on push to master, fixed to main (by @HB9HIL)
 
 ### Chore
-
 - Moved stuff in the repo around to make it a bit more organized (by @HB9HIL)
 
 ## [1.0.0] - 2026-09-19
 
 ### Added
-- Initial public 
-release: point-to-point link analysis and area coverage with the NTIA Irregular Terrain Model, antenna patterns, tree canopy loss, share links, PDF reports, admin panel, Prometheus metrics and a Helm chart. (by @HB9HIL)
+- Initial public release: point-to-point link analysis and area coverage with the NTIA Irregular Terrain Model, antenna patterns, tree canopy loss, share links, PDF reports, admin panel, Prometheus metrics and a Helm chart. (by @HB9HIL)
