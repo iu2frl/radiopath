@@ -1,13 +1,44 @@
 #!/usr/bin/env bash
-# Downloads the ITU-R data set of the HF model (P.533 / P.372) from the ITU-R Study Group 3 repository. About 138 MB.
+# Downloads the ITU-R data set of the HF model (P.533 / P.372) from the ITU-R Study Group 3 repository, pinned to one
+# commit and verified by SHA-256, so an upstream change can never alter the model silently. About 131 MB.
 # Usage:
 #   scripts/fetch-hf-data.sh [-f] [DIR]    # DIR defaults to RADIOPATH_HF_DIR from .env, else tmp/hf-data
-# Existing files of the right size are skipped, -f downloads everything again.
+# Files that already match their SHA-256 are skipped, -f downloads everything again.
+# To move to a newer upstream: change COMMIT, run with -f after replacing the hashes (sha256sum of the new files),
+# and run `go test ./internal/hf/...` against the result.
 set -euo pipefail
 
-SOURCE="https://raw.githubusercontent.com/ITU-R-Study-Group-3/ITU-R-HF/master/P533/Data"
+REPO="ITU-R-Study-Group-3/ITU-R-HF"
+COMMIT="1842db683f3f19146e60c77302f79172dfab0b7a" # last commit that touched P533/Data (2019-02-27)
+SOURCE="https://raw.githubusercontent.com/$REPO/$COMMIT/P533/Data"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ION_SIZE=11197844 # ionosNN.bin, fixed layout
+
+# SHA-256 of every file, "hash  name"
+FILES="1ca1a014e11b2f33a7f8c7c47b824e5fd53dd3a9ff89f07bb257e02d33b20aa9  P1239-3 Decile Factors.txt
+535ed4f03a0f35d4061f1878b06397cc9e46610cf599a6930696a8adb2836c24  COEFF01W.txt
+2f38315584d249a3437bc32112acf1a0d995ef312f7257befa1a3284e120e50c  COEFF02W.txt
+ec7557912e3cf0fb74c0dc5ac7dc66bac8fa52d765993f560ba16ff1004b0ceb  COEFF03W.txt
+61cac0db7f4de48241d4ee4aed2943a8498bb1dc44fe41895f13a937775b3f84  COEFF04W.txt
+95c7363f1605ab4ab85190ab6cad4f7218e39b480adee2ddcf19e6a20b57d105  COEFF05W.txt
+1935e05fc16d8476c071b3a9aa7b46f5b458fcaf12aca99131cf151f0bcd583a  COEFF06W.txt
+f70793c6f8718b73a3c40984d55815091a660a9a29acc6f6b06e49a5429df5fb  COEFF07W.txt
+548ece698b3337bac73c83479f5f2670cc01aceccd676ecead870342490a2983  COEFF08W.txt
+9b954efdaafd00cee24fdf91da9b794ebe1bab2d124cba1d5c944f76d8e4ec67  COEFF09W.txt
+5eb812b10eac52a6b8b95c128b44bf223ad673120df4e6f82656686ba84063f2  COEFF10W.txt
+f2cd45593a65e76c5502921dc7d51f8e02457021a36e4a8e4a6092326425cd25  COEFF11W.txt
+9ca240655c28afd09aef6cfebae2ce7d02fd3a16ae3dcebc5c733c42aec5a9e0  COEFF12W.txt
+bc85f60176ab6c3ba87786991144746d5136b1b0d8c2954dac6e4c1d9ed73f29  ionos01.bin
+8968d0d7f89488d2fda5ca5449e2625f1830b08652a628b4540c87cce4665395  ionos02.bin
+b4f4505adce4be843a56914b9d1031e0fbb4b48d4f401d47aedaf77d66f25eb2  ionos03.bin
+f5e00cdf933924737eb58440e75cf8aff6fad6c1c1ee8f1b46d7088f275a9293  ionos04.bin
+5e9fac4ddda38730747ac3a8d621a1817f86d5cd18457d180c469e216cb11fcc  ionos05.bin
+d9e565e5fabbd6c45e9b7832aa05765edcc21f94d79e4a01ca1b012acd29b46a  ionos06.bin
+ef44f7dbbf5fce17b115fbb8ae4252959c90a462b96334ce722910ee94b5b422  ionos07.bin
+c3fc2104df2e2b9608bc5c4c693d2a2e8a4b622a97152da10b4318b1c92f574e  ionos08.bin
+0e1326da42f9cfd3b11d4540f14ba8870c0d88f8aa034d84e9f89f5138b74796  ionos09.bin
+2a32b327d7fcc12bfa53e4668dcbf66a8b686bc6f0022de7617ca2802237b50a  ionos10.bin
+81a9165f356a4b860278b05279f1b716501d40652c5b52a9f8e27815f30250d6  ionos11.bin
+44e2ea84b3d2d169a3749d0e058319b739528e516b1a5e7fcffa09cdda89f29f  ionos12.bin"
 
 FORCE=0
 while getopts "f" opt; do
@@ -25,30 +56,26 @@ fi
 DIR=${DIR:-$ROOT/tmp/hf-data}
 mkdir -p "$DIR"
 
-# fetch NAME EXPECTED_SIZE; size 0 means any non-empty file (text files differ by line endings)
-fetch() {
-	local name=$1 want=$2 file="$DIR/$1" size=0
-	if [ "$FORCE" = 0 ] && [ -s "$file" ]; then
-		size=$(wc -c < "$file" | tr -d ' ')
-		if [ "$want" = 0 ] || [ "$size" = "$want" ]; then
-			echo "skip   $name"
-			return 0
-		fi
+sha256() {
+	if command -v sha256sum > /dev/null; then sha256sum < "$1" | cut -d' ' -f1; else shasum -a 256 < "$1" | cut -d' ' -f1; fi
+}
+
+while IFS= read -r line; do
+	want=${line%%  *}
+	name=${line#*  }
+	file="$DIR/$name"
+	if [ "$FORCE" = 0 ] && [ -f "$file" ] && [ "$(sha256 "$file")" = "$want" ]; then
+		echo "ok     $name"
+		continue
 	fi
 	echo "fetch  $name"
 	curl -fsS --retry 3 -o "$file.part" "$SOURCE/${name// /%20}"
-	size=$(wc -c < "$file.part" | tr -d ' ')
-	if [ "$size" = 0 ] || { [ "$want" != 0 ] && [ "$size" != "$want" ]; }; then
+	got=$(sha256 "$file.part")
+	if [ "$got" != "$want" ]; then
 		rm -f "$file.part"
-		echo "bad size $size for $name" >&2
-		return 1
+		echo "checksum mismatch for $name: got $got, want $want" >&2
+		exit 1
 	fi
 	mv -f "$file.part" "$file"
-}
-
-fetch "P1239-3 Decile Factors.txt" 0
-for m in 01 02 03 04 05 06 07 08 09 10 11 12; do
-	fetch "COEFF${m}W.txt" 0
-	fetch "ionos${m}.bin" "$ION_SIZE"
-done
+done <<< "$FILES"
 echo "done: $DIR (set RADIOPATH_HF_DIR to this directory)"
