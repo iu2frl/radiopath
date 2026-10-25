@@ -353,7 +353,7 @@ export interface paths {
         get?: never;
         /**
          * Change the address of the account
-         * @description 202: a confirmation link went to the new address, which takes effect once it is opened; the old address gets a notice then. 204: the address is the same.
+         * @description 202: a confirmation link went to the new address, which takes effect once it is opened; the old address gets a notice then. 204: the address is the same. 404: mail is not configured on this server.
          *
          *     Needs a session; API tokens cannot call it.
          */
@@ -3011,6 +3011,15 @@ export interface operations {
             };
             /** @description Forbidden */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Not Found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

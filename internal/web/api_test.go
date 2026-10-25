@@ -178,3 +178,9 @@ func TestParseScopes(t *testing.T) {
 		}
 	}
 }
+
+// Without a mailer, mails are dropped with a log line; a nil mailer in the background goroutine would end the process.
+func TestMailLaterWithoutMailer(t *testing.T) {
+	(&Server{Log: slog.New(slog.DiscardHandler)}).mailLater("a@example.test", "subject", "text")
+	time.Sleep(50 * time.Millisecond) // a panicking goroutine would crash the test binary by now
+}
