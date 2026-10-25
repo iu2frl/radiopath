@@ -78,7 +78,9 @@ rough model at HF. `modulation` is `analog` or `digital` (with optional `digital
 long way round the
 globe. The answer has one entry in `points` per hour and frequency: MUFs, field strength, receiver power, noise,
 SNR, circuit reliability and the dominant mode with its delay, elevation and loss. The value -307 means that the
-quantity does not apply to the path.
+quantity does not apply to the path. Beyond 7000 km the model reports the field strength of the whole path and no
+single modes, so `dominant_mode` is `NONE` there. `overall_reliability_pct` is only calculated for digital
+modulation up to 9000 km and is 0 otherwise; use `basic_reliability_pct` for analog modulation.
 
 ## Errors
 

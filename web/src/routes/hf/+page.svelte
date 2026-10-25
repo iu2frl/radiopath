@@ -15,6 +15,29 @@
 	const now = new Date();
 	const sites = createQuery(() => ({ queryKey: ['sites'], queryFn: () => call(api.GET('/api/sites')) }));
 	const antennas = createQuery(() => ({ queryKey: ['antennas'], queryFn: () => call(api.GET('/api/antennas')) }));
+	const links = createQuery(() => ({ queryKey: ['links'], queryFn: () => call(api.GET('/api/links')) }));
+
+	// The parameters of digital modulation; the defaults are those of the ITU program.
+	const digitalFields = [
+		['required_sir_db', 'Required SIR (dB)'],
+		['f0_hz', 'F0 (Hz)'],
+		['t0_ms', 'T0 (ms)'],
+		['a_db', 'A (dB)'],
+		['tw_ms', 'TW (ms)'],
+		['fw_hz', 'FW (Hz)']
+	] as const;
+
+	// Rule-of-thumb figures for common modes: the required SNR is in the mode's own bandwidth, from the usual thresholds in 2500 Hz.
+	// The digital modes use the defaults of the ITU program for the multipath parameters.
+	const modes = [
+		{ id: 'am', label: 'AM', modulation: 'analog', bandwidth_hz: '6000', required_snr_db: '20' },
+		{ id: 'fm', label: 'FM', modulation: 'analog', bandwidth_hz: '12000', required_snr_db: '15' },
+		{ id: 'ssb', label: 'SSB', modulation: 'analog', bandwidth_hz: '3000', required_snr_db: '15' },
+		{ id: 'psk31', label: 'PSK31', modulation: 'digital', bandwidth_hz: '31.25', required_snr_db: '10' },
+		{ id: 'rtty', label: 'RTTY', modulation: 'digital', bandwidth_hz: '250', required_snr_db: '15' },
+		{ id: 'ft8', label: 'FT8', modulation: 'digital', bandwidth_hz: '50', required_snr_db: '-4' },
+		{ id: 'ft4', label: 'FT4', modulation: 'digital', bandwidth_hz: '83.3', required_snr_db: '-3' }
+	] as const;
 
 	let v = $state({
 		site_a_id: '',
@@ -24,21 +47,34 @@
 		ssn: '60',
 		hours_utc: '6, 12, 18',
 		frequencies_mhz: '7.1, 14.2',
-		tx_power_dbw: '0',
+		tx_power_dbm: '50',
 		tx_gain_dbi: '0',
 		rx_gain_dbi: '0',
 		tx_antenna_id: '',
 		rx_antenna_id: '',
+		tx_azimuth_deg: '',
+		rx_azimuth_deg: '',
 		bandwidth_hz: '3000',
 		required_snr_db: '15',
 		snr_percentile: '90',
 		noise_environment: 'rural',
+		mode: 'ssb',
 		modulation: 'analog',
+		required_sir_db: '10',
+		f0_hz: '0',
+		t0_ms: '0',
+		a_db: '0',
+		tw_ms: '0',
+		fw_hz: '0',
 		long_path: false
 	});
 	let busy = $state(false);
 	let error = $state<unknown>(null);
 	let points = $state<HFPoint[] | null>(null);
+	// Whether the shown points were predicted with digital modulation, which decides the reliability to show.
+	let digitalRun = $state(false);
+
+	const mode = $derived(modes.find((m) => m.id === v.mode));
 
 	// A new prediction starts from the first two sites.
 	$effect(() => {
@@ -56,13 +92,40 @@
 			.map(parseNum);
 	}
 
+	/** Copies the sites, antennas, aiming, gains and power of a link into the form; its frequency only if it is an HF one. */
+	function fromLink(id: string) {
+		const l = links.data?.find((x) => String(x.id) === id);
+		if (!l) return;
+		v.site_a_id = String(l.site_a_id);
+		v.site_b_id = String(l.site_b_id);
+		v.tx_antenna_id = String(l.tx_antenna_id ?? '');
+		v.rx_antenna_id = String(l.rx_antenna_id ?? '');
+		v.tx_azimuth_deg = String(l.tx_azimuth_deg ?? '');
+		v.rx_azimuth_deg = String(l.rx_azimuth_deg ?? '');
+		v.tx_gain_dbi = String(l.tx_gain_dbi ?? 0);
+		v.rx_gain_dbi = String(l.rx_gain_dbi ?? 0);
+		v.tx_power_dbm = String(l.tx_power_dbm);
+		if (l.frequency_mhz >= 1 && l.frequency_mhz <= 30) v.frequencies_mhz = String(l.frequency_mhz);
+	}
+
+	/** Applies a mode: its modulation, bandwidth and required SNR; Custom keeps the values for editing. */
+	function pickMode(id: string) {
+		const m = modes.find((x) => x.id === id);
+		if (!m) return;
+		v.modulation = m.modulation;
+		v.bandwidth_hz = m.bandwidth_hz;
+		v.required_snr_db = m.required_snr_db;
+		v.required_sir_db = '10';
+		for (const k of ['f0_hz', 't0_ms', 'a_db', 'tw_ms', 'fw_hz'] as const) v[k] = '0';
+	}
+
 	/** Turns the text fields into the API body; fields that are no number give one message each. */
 	function body(): HFPredictionInput {
 		const nums = {
 			year: 'Year',
 			month: 'Month',
 			ssn: 'Sunspot number',
-			tx_power_dbw: 'TX power',
+			tx_power_dbm: 'TX power',
 			tx_gain_dbi: 'TX gain',
 			rx_gain_dbi: 'RX gain',
 			bandwidth_hz: 'Bandwidth',
@@ -74,6 +137,23 @@
 		for (const [k, label] of Object.entries(nums) as [keyof typeof nums, string][]) {
 			n[k] = parseNum(v[k]);
 			if (isNaN(n[k])) bad.push(`${label}: not a number`);
+		}
+		// An azimuth only counts with an antenna; empty aims at the other end.
+		const az: Partial<Record<'tx_azimuth_deg' | 'rx_azimuth_deg', number>> = {};
+		for (const [k, label, ant] of [
+			['tx_azimuth_deg', 'TX azimuth', 'tx_antenna_id'],
+			['rx_azimuth_deg', 'RX azimuth', 'rx_antenna_id']
+		] as const) {
+			if (!v[ant] || v[k].trim() === '') continue;
+			az[k] = parseNum(v[k]);
+			if (isNaN(az[k]!)) bad.push(`${label}: not a number`);
+		}
+		const dg = {} as Record<(typeof digitalFields)[number][0], number>;
+		if (v.modulation === 'digital') {
+			for (const [k, label] of digitalFields) {
+				dg[k] = parseNum(v[k]);
+				if (isNaN(dg[k])) bad.push(`${label}: not a number`);
+			}
 		}
 		const hours = list(v.hours_utc);
 		const freqs = list(v.frequencies_mhz);
@@ -88,16 +168,19 @@
 			ssn: n.ssn,
 			hours_utc: hours,
 			frequencies_mhz: freqs,
-			tx_power_dbw: n.tx_power_dbw,
+			tx_power_dbw: Math.round((n.tx_power_dbm - 30) * 100) / 100,
 			tx_gain_dbi: n.tx_gain_dbi,
 			rx_gain_dbi: n.rx_gain_dbi,
 			tx_antenna_id: v.tx_antenna_id ? Number(v.tx_antenna_id) : undefined,
 			rx_antenna_id: v.rx_antenna_id ? Number(v.rx_antenna_id) : undefined,
+			tx_azimuth_deg: az.tx_azimuth_deg,
+			rx_azimuth_deg: az.rx_azimuth_deg,
 			bandwidth_hz: n.bandwidth_hz,
 			required_snr_db: n.required_snr_db,
 			snr_percentile: n.snr_percentile,
 			noise_environment: v.noise_environment as HFPredictionInput['noise_environment'],
 			modulation: v.modulation as HFPredictionInput['modulation'],
+			digital: v.modulation === 'digital' ? dg : undefined,
 			long_path: v.long_path || undefined
 		};
 	}
@@ -108,7 +191,9 @@
 		busy = true;
 		error = null;
 		try {
+			const digital = v.modulation === 'digital';
 			points = (await call(api.POST('/api/hf/predictions', { body: body() }))).points;
+			digitalRun = digital;
 		} catch (err) {
 			error = err;
 			notifyError(err);
@@ -121,6 +206,11 @@
 	function val(x: number, digits = 1): string {
 		return x === -307 ? '–' : x.toFixed(digits);
 	}
+
+	/** The circuit reliability of a point: the overall one exists only for digital modulation up to 9000 km, the basic one otherwise. */
+	function reliability(p: HFPoint): string {
+		return val(digitalRun && p.distance_km <= 9000 ? p.overall_reliability_pct : p.basic_reliability_pct, 0);
+	}
 </script>
 
 <PageHead title="HF prediction" />
@@ -128,6 +218,14 @@
 	<form class="grid gap-6 rounded-lg border bg-card p-4" onsubmit={submit}>
 		<fieldset class="grid gap-3">
 			<legend class="mb-2 w-full border-b pb-1 text-xs font-medium text-muted-foreground">Circuit</legend>
+			{#if links.data?.length}
+				<Field wide label="Fill from link">
+					<NativeSelect class="w-68" name="from_link" value="" onchange={(e) => fromLink(e.currentTarget.value)}>
+						<option value="">choose a link</option>
+						{#each links.data as l (l.id)}<option value={String(l.id)}>{l.name}</option>{/each}
+					</NativeSelect>
+				</Field>
+			{/if}
 			{#each [['site_a_id', 'Site A (TX)'], ['site_b_id', 'Site B (RX)']] as const as [name, label] (name)}
 				<Field wide {label}>
 					<NativeSelect class="w-68" {name} bind:value={v[name]}>
@@ -156,10 +254,10 @@
 		</fieldset>
 		<fieldset class="grid gap-3">
 			<legend class="mb-2 w-full border-b pb-1 text-xs font-medium text-muted-foreground">Stations</legend>
-			<Field wide label="TX power (dBW)"
-				><Input class="max-w-68 font-mono" name="tx_power_dbw" inputmode="decimal" bind:value={v.tx_power_dbw} /></Field
+			<Field wide label="TX power (dBm)"
+				><Input class="max-w-68 font-mono" name="tx_power_dbm" inputmode="decimal" bind:value={v.tx_power_dbm} /></Field
 			>
-			{#each [['tx_antenna_id', 'tx_gain_dbi', 'TX'], ['rx_antenna_id', 'rx_gain_dbi', 'RX']] as const as [ant, gain, label] (ant)}
+			{#each [['tx_antenna_id', 'tx_gain_dbi', 'tx_azimuth_deg', 'TX'], ['rx_antenna_id', 'rx_gain_dbi', 'rx_azimuth_deg', 'RX']] as const as [ant, gain, az, label] (ant)}
 				{@const sel = antennas.data?.find((a) => String(a.id) === v[ant])}
 				<Field wide label="{label} antenna">
 					<NativeSelect class="w-68" name={ant} bind:value={v[ant]}>
@@ -174,23 +272,54 @@
 						<Input class="max-w-68 font-mono" name={gain} inputmode="decimal" bind:value={v[gain]} />
 					{/if}
 				</Field>
+				{#if sel}
+					<Field wide label="{label} main lobe azimuth (deg)">
+						<Input
+							class="max-w-68 font-mono"
+							name={az}
+							inputmode="decimal"
+							placeholder={label === 'TX' ? 'towards B' : 'towards A'}
+							bind:value={v[az]}
+						/>
+					</Field>
+				{/if}
 			{/each}
-			<p class="text-xs text-muted-foreground">An antenna measured at VHF is only a rough model at HF; the pattern aims at the other site.</p>
+			<p class="text-xs text-muted-foreground">
+				An antenna measured at VHF is only a rough model at HF. An empty azimuth aims the antenna at the other site.
+			</p>
 		</fieldset>
 		<fieldset class="grid gap-3">
 			<legend class="mb-2 w-full border-b pb-1 text-xs font-medium text-muted-foreground">Signal</legend>
-			<Field wide label="Modulation">
-				<NativeSelect class="w-68" name="modulation" bind:value={v.modulation}>
-					<option value="analog">analog</option>
-					<option value="digital">digital</option>
+			<Field wide label="Mode">
+				<NativeSelect class="w-68" name="mode" bind:value={v.mode} onchange={(e) => pickMode(e.currentTarget.value)}>
+					{#each modes as m (m.id)}<option value={m.id}>{m.label}</option>{/each}
+					<option value="custom">Custom</option>
 				</NativeSelect>
 			</Field>
-			<Field wide label="Bandwidth (Hz)"
-				><Input class="max-w-68 font-mono" name="bandwidth_hz" inputmode="decimal" bind:value={v.bandwidth_hz} /></Field
-			>
-			<Field wide label="Required SNR (dB)"
-				><Input class="max-w-68 font-mono" name="required_snr_db" inputmode="decimal" bind:value={v.required_snr_db} /></Field
-			>
+			{#if mode}
+				<p class="text-xs text-muted-foreground">
+					{mode.modulation}, {mode.bandwidth_hz} Hz bandwidth, {mode.required_snr_db} dB required SNR in that bandwidth. These are rule-of-thumb figures;
+					choose Custom to set your own.
+				</p>
+			{:else}
+				<Field wide label="Modulation">
+					<NativeSelect class="w-68" name="modulation" bind:value={v.modulation}>
+						<option value="analog">analog</option>
+						<option value="digital">digital</option>
+					</NativeSelect>
+				</Field>
+				{#if v.modulation === 'digital'}
+					{#each digitalFields as [name, label] (name)}
+						<Field wide {label}><Input class="max-w-68 font-mono" {name} inputmode="decimal" bind:value={v[name]} /></Field>
+					{/each}
+				{/if}
+				<Field wide label="Bandwidth (Hz)"
+					><Input class="max-w-68 font-mono" name="bandwidth_hz" inputmode="decimal" bind:value={v.bandwidth_hz} /></Field
+				>
+				<Field wide label="Required SNR (dB)"
+					><Input class="max-w-68 font-mono" name="required_snr_db" inputmode="decimal" bind:value={v.required_snr_db} /></Field
+				>
+			{/if}
 			<Field wide label="SNR percentile (1 to 99)">
 				<Input class="max-w-68 font-mono" name="snr_percentile" inputmode="numeric" bind:value={v.snr_percentile} />
 			</Field>
@@ -218,7 +347,7 @@
 					<Table.Row>
 						<Table.Head>Hour</Table.Head>
 						<Table.Head class="text-right">MHz</Table.Head>
-						<Table.Head>Mode</Table.Head>
+						<Table.Head>Propagation mode</Table.Head>
 						<Table.Head class="hidden text-right sm:table-cell">MUF (MHz)</Table.Head>
 						<Table.Head class="hidden text-right sm:table-cell">Field (dBµV/m)</Table.Head>
 						<Table.Head class="text-right">SNR (dB)</Table.Head>
@@ -230,18 +359,22 @@
 						<Table.Row>
 							<Table.Cell class="font-mono tabular-nums">{String(p.hour_utc).padStart(2, '0')}:00</Table.Cell>
 							<Table.Cell class="text-right font-mono tabular-nums">{p.frequency_mhz}</Table.Cell>
-							<Table.Cell>{p.dominant_mode}</Table.Cell>
+							<Table.Cell>{p.distance_km > 7000 ? '–' : p.dominant_mode}</Table.Cell>
 							<Table.Cell class="hidden text-right font-mono tabular-nums sm:table-cell">{val(p.muf_50_mhz)}</Table.Cell>
 							<Table.Cell class="hidden text-right font-mono tabular-nums sm:table-cell">{val(p.field_strength_dbuv_m)}</Table.Cell>
 							<Table.Cell class="text-right font-mono tabular-nums">{val(p.snr_db)}</Table.Cell>
-							<Table.Cell class="text-right font-mono tabular-nums">{val(p.overall_reliability_pct, 0)} %</Table.Cell>
+							<Table.Cell class="text-right font-mono tabular-nums">{reliability(p)} %</Table.Cell>
 						</Table.Row>
 					{/each}
 				</Table.Body>
 			</Table.Root>
 		</div>
 		<p class="text-xs text-muted-foreground">
-			Median values; MUF is exceeded on 50% of the days. A dash means the quantity does not apply to the path.
+			Path length {points[0].distance_km.toFixed(0)} km. Median values; MUF is exceeded on 50% of the days. A dash means the quantity does not apply to
+			the path.
+			{#if points[0].distance_km > 7000}
+				Beyond 7000 km the model gives the field strength of the whole path, not of single modes, so there is no propagation mode.
+			{/if}
 		</p>
 	{:else if points}
 		<EmptyState icon={Waves}>The model returned no points.</EmptyState>
