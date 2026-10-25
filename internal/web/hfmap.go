@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 
@@ -21,6 +22,12 @@ const (
 	// hfMapUserMax is the number of maps per user and minute: one is up to 15000 runs, a path at most 720.
 	hfMapUserMax = 6
 )
+
+// hfMapSlots bounds the maps this process computes at once: one uses every CPU for a few seconds, more would starve
+// link analysis and the probes. Further requests queue for up to hfMapWait.
+var hfMapSlots = make(chan struct{}, 1)
+
+const hfMapWait = 30 * time.Second
 
 type HFMapInput struct {
 	SiteID int64 `json:"site_id" doc:"Transmitting site; the map shows the circuit from it to every cell of the globe"`
@@ -172,6 +179,16 @@ func (s *Server) registerHFMap(api huma.API) {
 	huma.Register(api, o, func(ctx context.Context, in *struct{ Body HFMapInput }) (*HFMapOutput, error) {
 		if s.HF == nil {
 			return nil, huma.Error503ServiceUnavailable("The HF model is not configured on this server")
+		}
+		wait := time.NewTimer(hfMapWait)
+		defer wait.Stop()
+		select {
+		case hfMapSlots <- struct{}{}:
+			defer func() { <-hfMapSlots }()
+		case <-wait.C:
+			return nil, huma.Error429TooManyRequests("The server is busy with other maps, try again in a minute.")
+		case <-ctx.Done():
+			return nil, ctx.Err()
 		}
 		owner := userOf(ctx).ID
 		if err := s.hfMapHit(ctx, owner); err != nil {

@@ -90,7 +90,8 @@ site to the centre of every 10 degree cell, for one frequency and the requested 
 in `frames` per hour, each with `reliability_pct`: one integer per cell, rows from north to south and cells from west
 to east, the same reliability as in the prediction (overall for digital modulation up to 9000 km, basic otherwise).
 The value -307 marks a cell the model could not calculate. A map is up to 15000 runs of the model, so it counts
-against its own limit of 6 maps per user and minute (429 beyond that); otherwise the errors are those of a prediction.
+against its own limit of 6 maps per user and minute (429 beyond that); a server computes one map at a time, further ones
+wait for their turn up to 30 seconds and answer 429 after that. Otherwise the errors are those of a prediction.
 
 `GET /api/hf/sunspots?year=&month=` (scope `hf:read`) returns the 12-month smoothed sunspot number (R12) of a month,
 the value for `ssn`: `ssn` (1 to 311), `source` (`observed` for the smoothed measurement, `predicted` for the forecast
