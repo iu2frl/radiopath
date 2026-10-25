@@ -57,7 +57,7 @@ Without a session or token these routes answer 401 (403 for a token without the 
 
 `POST /api/hf/predictions` (scope `hf:read`, session) predicts an HF circuit between two of the user's sites with
 ITU-R P.533-14 and P.372 (`internal/hf`) and stores nothing. It counts towards the 60 calculations per minute of a
-user (429 beyond that). It answers 503 until `RADIOPATH_HF_DIR` points at the
+user (429 beyond that). The web app offers it on the page `/hf`. It answers 503 until `RADIOPATH_HF_DIR` points at the
 ITU data set, and 404 for a site of another user. The body names the sites and the conditions:
 
 ```json
