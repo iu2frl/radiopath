@@ -29,6 +29,10 @@ var hfMapSlots = make(chan struct{}, 1)
 
 const hfMapWait = 30 * time.Second
 
+// errClientGone answers a request whose client hung up: 499 as in nginx, so it is neither a server error in the
+// metrics nor in the log; nobody reads the body.
+var errClientGone = huma.NewError(499, "Client closed request")
+
 type HFMapInput struct {
 	SiteID int64 `json:"site_id" doc:"Transmitting site; the map shows the circuit from it to every cell of the globe"`
 
@@ -188,7 +192,7 @@ func (s *Server) registerHFMap(api huma.API) {
 		case <-wait.C:
 			return nil, huma.Error429TooManyRequests("The server is busy with other maps, try again in a minute.")
 		case <-ctx.Done():
-			return nil, ctx.Err()
+			return nil, errClientGone
 		}
 		owner := userOf(ctx).ID
 		if err := s.hfMapHit(ctx, owner); err != nil {
@@ -203,6 +207,9 @@ func (s *Server) registerHFMap(api huma.API) {
 			return nil, err
 		}
 		m, err := hfMapCompute(ctx, s.HF, req)
+		if ctx.Err() != nil {
+			return nil, errClientGone
+		}
 		if err != nil {
 			s.Log.Error("hf map failed", "err", err)
 			return nil, huma.Error500InternalServerError("Internal error")
