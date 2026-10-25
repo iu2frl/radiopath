@@ -31,7 +31,7 @@ test('rejects a wrong current password', async ({ page }) => {
 
 const changeEmail = async (page, email, pw) => {
   await page.goto('/account')
-  await expect(page.locator('[name=email]')).not.toHaveValue('')
+  await page.getByRole('button', { name: 'Change', exact: true }).click()
   await page.locator('[name=email]').fill(email)
   await page.locator('[name=email_password]').fill(pw)
   await page.locator('[name=email_password]').press('Enter')
@@ -41,6 +41,7 @@ test('adds an address by confirmation link', async ({ page }) => {
   await login(page, user, newPassword)
   await page.goto('/account')
   await expect(page.getByText('No address on file').first()).toBeVisible()
+  await page.getByRole('button', { name: 'Add address' }).click()
   await page.locator('[name=email]').fill('account@example.test')
   await page.locator('[name=email_password]').fill(newPassword)
   await page.locator('[name=email_password]').press('Enter')
@@ -48,7 +49,8 @@ test('adds an address by confirmation link', async ({ page }) => {
   await page.goto(await mailLink(page, 'account@example.test', 'Confirm'))
   await expect.poll(() => pathname(page)).toBe('/account')
   await expect(toast(page, 'Address confirmed.')).toBeVisible()
-  await expect(page.locator('[name=email]')).toHaveValue('account@example.test')
+  await expect(page.locator('#email')).toHaveText('account@example.test')
+  await expect(page.getByText('Confirmed', { exact: true })).toBeVisible()
 })
 
 test('changes the address only with the password and tells the old one', async ({ page }) => {
