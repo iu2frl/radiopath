@@ -82,6 +82,16 @@ func TestParseHFInvalid(t *testing.T) {
 		t.Error("same site accepted")
 	}
 	in = hfInput()
+	id := int64(7)
+	in.TxAntennaID, in.TxGainDBi = &id, 100
+	if req, err := parseHF(in, a, b); err != nil || req.TxAntenna.GainOffset != 0 {
+		t.Errorf("gain with an antenna: %v, offset %v", err, req.TxAntenna.GainOffset)
+	}
+	in.TxAntennaID = nil
+	if _, err := parseHF(in, a, b); err == nil {
+		t.Error("isotropic gain of 100 accepted")
+	}
+	in = hfInput()
 	in.HoursUTC = []int{6, 12, 6}
 	if _, err := parseHF(in, a, b); err == nil {
 		t.Error("duplicate hour accepted")

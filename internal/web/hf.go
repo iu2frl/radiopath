@@ -115,8 +115,13 @@ func parseHF(in HFPredictionInput, a, b store.Site) (hf.Request, error) {
 		SNRXXPercent: int(c.num("snr_percentile", "SNR percentile", float64(in.SNRPercentile), 1, 99)),
 		LongPath:     in.LongPath,
 	}
-	req.TxAntenna.GainOffset = c.num("tx_gain_dbi", "TX gain", in.TxGainDBi, -50, 60)
-	req.RxAntenna.GainOffset = c.num("rx_gain_dbi", "RX gain", in.RxGainDBi, -50, 60)
+	// A stored antenna brings its own gain, the isotropic one is then ignored as documented.
+	if in.TxAntennaID == nil {
+		req.TxAntenna.GainOffset = c.num("tx_gain_dbi", "TX gain", in.TxGainDBi, -50, 60)
+	}
+	if in.RxAntennaID == nil {
+		req.RxAntenna.GainOffset = c.num("rx_gain_dbi", "RX gain", in.RxGainDBi, -50, 60)
+	}
 	req.TxAntenna.Bearing = c.deg("tx_azimuth_deg", "TX azimuth", in.TxAzimuthDeg)
 	req.RxAntenna.Bearing = c.deg("rx_azimuth_deg", "RX azimuth", in.RxAzimuthDeg)
 
