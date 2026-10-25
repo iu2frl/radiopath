@@ -81,6 +81,16 @@ func TestParseHFInvalid(t *testing.T) {
 	if _, err := parseHF(hfInput(), a, a); err == nil {
 		t.Error("same site accepted")
 	}
+	in = hfInput()
+	in.HoursUTC = []int{6, 12, 6}
+	if _, err := parseHF(in, a, b); err == nil {
+		t.Error("duplicate hour accepted")
+	}
+	in = hfInput()
+	in.FrequenciesMHz = []float64{7.1, 14.2, 7.1}
+	if _, err := parseHF(in, a, b); err == nil {
+		t.Error("duplicate frequency accepted")
+	}
 }
 
 // Values JSON cannot carry become the model's "does not apply" value.

@@ -126,12 +126,18 @@ func parseHF(in HFPredictionInput, a, b store.Site) (hf.Request, error) {
 	for _, h := range in.HoursUTC {
 		c.num("hours_utc", "Hour", float64(h), 1, 24)
 	}
+	if hasDuplicate(in.HoursUTC) {
+		c.add("hours_utc", "Hours: remove duplicates")
+	}
 	req.Hours = in.HoursUTC
 	if len(in.FrequenciesMHz) == 0 || len(in.FrequenciesMHz) > maxHFFreqs {
 		c.add("frequencies_mhz", "Frequencies: between 1 and 30 values")
 	}
 	for _, f := range in.FrequenciesMHz {
 		c.num("frequencies_mhz", "Frequency", f, 1, 30)
+	}
+	if hasDuplicate(in.FrequenciesMHz) {
+		c.add("frequencies_mhz", "Frequencies: remove duplicates")
 	}
 	req.Frequencies = in.FrequenciesMHz
 
@@ -163,6 +169,18 @@ func parseHF(in HFPredictionInput, a, b store.Site) (hf.Request, error) {
 		c.add("", "Site A and B must differ")
 	}
 	return req, c.err()
+}
+
+// hasDuplicate reports whether a value occurs more than once in s.
+func hasDuplicate[T comparable](s []T) bool {
+	seen := make(map[T]bool, len(s))
+	for _, v := range s {
+		if seen[v] {
+			return true
+		}
+		seen[v] = true
+	}
+	return false
 }
 
 // hfPattern returns the gain in dBi of a stored antenna at an azimuth offset from its main lobe and an elevation above
