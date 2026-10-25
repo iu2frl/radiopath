@@ -105,3 +105,63 @@ test('draws the MUF and reliability charts', async ({ page }) => {
   await expect(c(page, 'tr', '06:00')).toContainText('2F2')
   await expect(page.getByText('Path length 2000 km')).toBeVisible()
 })
+
+// a map answer built by hand: a frame per requested hour, one cell the model could not calculate
+const mapAnswer = (body) => ({
+  step_deg: 10, rows: 18, cols: 36,
+  frames: body.hours_utc.map((h) => ({ hour_utc: h, reliability_pct: Array.from({ length: 648 }, (_, i) => (i === 0 ? -307 : h === 6 ? 80 : 20)) })),
+})
+
+test('shows the reliability map with an hour slider', async ({ page }) => {
+  const sites = await (await page.request.get('/api/sites')).json()
+  const maps = []
+  await page.route('**/api/hf/predictions', (route) =>
+    route.fulfill({ json: { points: [point(6, 7.1), point(6, 14.2), point(12, 7.1), point(12, 14.2)] } }),
+  )
+  await page.route('**/api/hf/maps', (route) => {
+    const body = route.request().postDataJSON()
+    maps.push(body)
+    return route.fulfill({ json: mapAnswer(body) })
+  })
+  await page.goto('/hf')
+  await expect(c(page, 'button', 'Predict')).toBeEnabled()
+  await page.locator('[name=hours_utc]').fill('12, 6')
+  await c(page, 'button', 'Predict').click()
+
+  const panel = page.getByRole('region', { name: 'Reliability map' })
+  await expect(panel.getByRole('heading')).toContainText('at 7.1 MHz')
+  await expect(panel.locator('.leaflet-marker-icon')).toHaveCount(2)
+  await expect(panel.locator('canvas')).toHaveCount(1)
+  // from site A, at the first frequency, hours in order
+  expect(maps[0]).toMatchObject({ site_id: sites.find((s) => s.name === 'HF A').id, frequency_mhz: 7.1, hours_utc: [6, 12] })
+
+  const slider = panel.locator('[name=map_hour]')
+  await expect(slider).toHaveAttribute('max', '1')
+  await expect(panel.getByText('06:00 UTC')).toBeVisible()
+  await slider.fill('1')
+  await expect(panel.getByText('12:00 UTC')).toBeVisible()
+
+  await panel.locator('[name=map_frequency]').selectOption('14.2')
+  await expect(panel.getByRole('heading')).toContainText('at 14.2 MHz')
+  expect(maps).toHaveLength(2)
+  expect(maps[1].frequency_mhz).toBe(14.2)
+
+  // one hour needs no slider
+  await page.locator('[name=hours_utc]').fill('12')
+  await c(page, 'button', 'Predict').click()
+  await expect(panel.getByText('12:00 UTC')).toBeVisible()
+  await expect(panel.locator('[name=map_hour]')).toHaveCount(0)
+})
+
+test('shows why the map is missing', async ({ page }) => {
+  await page.route('**/api/hf/predictions', (route) => route.fulfill({ json: { points: [point(6, 7.1)] } }))
+  await page.route('**/api/hf/maps', (route) =>
+    route.fulfill({ status: 429, contentType: 'application/problem+json', json: { title: 'Too Many Requests', status: 429, detail: 'Too many maps, try again in a minute.' } }),
+  )
+  await page.goto('/hf')
+  await expect(c(page, 'button', 'Predict')).toBeEnabled()
+  await c(page, 'button', 'Predict').click()
+  const panel = page.getByRole('region', { name: 'Reliability map' })
+  await expect(panel.getByRole('alert')).toContainText('Too many maps')
+  await expect(page.getByRole('img', { name: 'MUF (MHz)' })).toBeVisible()
+})

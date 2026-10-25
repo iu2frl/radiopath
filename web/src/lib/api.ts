@@ -19,6 +19,7 @@ export type LegendBin = Schemas['LegendBin'];
 export type Token = Schemas['Token'];
 export type HFPredictionInput = Schemas['HFPredictionInput'];
 export type HFPoint = Schemas['HFPoint'];
+export type HFMap = Schemas['HFMap'];
 
 export const api = createClient<paths>({ baseUrl: '' });
 

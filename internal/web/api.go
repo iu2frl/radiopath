@@ -102,6 +102,7 @@ func (s *Server) registerAPI(api huma.API) {
 	s.registerLinks(api)
 	s.registerCoverages(api)
 	s.registerHF(api)
+	s.registerHFMap(api)
 	s.registerAccount(api)
 	s.registerTokens(api)
 }

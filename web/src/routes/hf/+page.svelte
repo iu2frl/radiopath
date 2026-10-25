@@ -1,14 +1,16 @@
 <script lang="ts">
 	import Waves from '@lucide/svelte/icons/audio-waveform';
 	import { createQuery } from '@tanstack/svelte-query';
-	import { api, call, parseNum, type HFPoint, type HFPredictionInput } from '$lib/api';
+	import { api, call, parseNum, type HFMap, type HFPoint, type HFPredictionInput, type Site } from '$lib/api';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { NativeSelect } from '$lib/components/ui/native-select';
+	import { Skeleton } from '$lib/components/ui/skeleton';
 	import * as Table from '$lib/components/ui/table';
 	import EmptyState from '$lib/EmptyState.svelte';
 	import Field from '$lib/Field.svelte';
 	import FormErrors from '$lib/FormErrors.svelte';
+	import HFHeatmap, { heat } from '$lib/HFHeatmap.svelte';
 	import LineChart, { type Pt } from '$lib/LineChart.svelte';
 	import { invalid, notifyError } from '$lib/notify';
 	import PageHead from '$lib/PageHead.svelte';
@@ -74,6 +76,16 @@
 	let points = $state<HFPoint[] | null>(null);
 	// Whether the shown points were predicted with digital modulation, which decides the reliability to show.
 	let digitalRun = $state(false);
+
+	// The reliability map of the last prediction: from site A at one of the frequencies, one frame per hour.
+	let heatmap = $state<HFMap | null>(null);
+	let heatError = $state<unknown>(null);
+	let heatBusy = $state(false);
+	let heatFreq = $state(0);
+	let heatFrame = $state(0);
+	let heatSites = $state<{ tx: Site; rx: Site } | null>(null);
+	let heatBody = $state.raw<HFPredictionInput | null>(null);
+	let heatSeq = 0;
 
 	const mode = $derived(modes.find((m) => m.id === v.mode));
 
@@ -186,14 +198,65 @@
 		};
 	}
 
-	/** Runs the prediction; nothing is stored. */
+	/** Loads the map of a prediction at one frequency; the antennas count as isotropic with their main lobe gain. Errors show in the map panel. */
+	async function loadMap(b: HFPredictionInput, freq: number) {
+		const n = ++heatSeq;
+		heatBusy = true;
+		heatError = null;
+		/** The main lobe gain of a chosen antenna, else the typed gain. */
+		const gain = (id: number | undefined, fallback: number) => antennas.data?.find((a) => a.id === id)?.gain_dbi ?? fallback;
+		try {
+			const m = await call(
+				api.POST('/api/hf/maps', {
+					body: {
+						site_id: b.site_a_id,
+						year: b.year,
+						month: b.month,
+						hours_utc: [...new Set(b.hours_utc)].sort((x, y) => x - y),
+						ssn: b.ssn,
+						frequency_mhz: freq,
+						tx_power_dbw: b.tx_power_dbw,
+						tx_gain_dbi: gain(b.tx_antenna_id, b.tx_gain_dbi ?? 0),
+						rx_gain_dbi: gain(b.rx_antenna_id, b.rx_gain_dbi ?? 0),
+						bandwidth_hz: b.bandwidth_hz,
+						required_snr_db: b.required_snr_db,
+						snr_percentile: b.snr_percentile,
+						noise_environment: b.noise_environment,
+						modulation: b.modulation,
+						digital: b.digital
+					}
+				})
+			);
+			if (n !== heatSeq) return;
+			heatmap = m;
+			heatFreq = freq;
+			heatFrame = 0;
+		} catch (err) {
+			if (n === heatSeq) heatError = err;
+		} finally {
+			if (n === heatSeq) heatBusy = false;
+		}
+	}
+
+	/** Shows the map at another of the predicted frequencies. */
+	function pickFrequency(freq: number) {
+		if (heatBody && freq !== heatFreq) void loadMap(heatBody, freq);
+	}
+
+	/** Runs the prediction and the map; nothing is stored. */
 	async function submit(e: SubmitEvent) {
 		e.preventDefault();
 		busy = true;
 		error = null;
 		try {
 			const digital = v.modulation === 'digital';
-			points = (await call(api.POST('/api/hf/predictions', { body: body() }))).points;
+			const b = body();
+			const tx = sites.data?.find((s) => s.id === b.site_a_id);
+			const rx = sites.data?.find((s) => s.id === b.site_b_id);
+			heatBody = b;
+			heatSites = tx && rx ? { tx, rx } : null;
+			if (b.frequencies_mhz.length) void loadMap(b, b.frequencies_mhz[0]);
+			points = (await call(api.POST('/api/hf/predictions', { body: b }))).points;
 			digitalRun = digital;
 		} catch (err) {
 			error = err;
@@ -371,6 +434,61 @@
 	</form>
 
 	<FormErrors {error} />
+	{#if heatSites && (heatmap || heatBusy || heatError)}
+		<section class="grid gap-3 rounded-lg border bg-card p-3" aria-label="Reliability map">
+			<div class="flex flex-wrap items-center justify-between gap-2">
+				<h2 class="text-sm font-medium">Reliability from {heatSites.tx.name} at {heatFreq || heatBody?.frequencies_mhz[0]} MHz</h2>
+				{#if freqs.length > 1}
+					<NativeSelect
+						class="w-32"
+						name="map_frequency"
+						aria-label="Frequency of the map"
+						value={String(heatFreq)}
+						disabled={heatBusy}
+						onchange={(e) => pickFrequency(Number(e.currentTarget.value))}
+					>
+						{#each freqs as f (f)}<option value={String(f)}>{f} MHz</option>{/each}
+					</NativeSelect>
+				{/if}
+			</div>
+			<FormErrors error={heatError} />
+			{#if heatmap}
+				<div class={heatBusy ? 'opacity-60' : undefined}>
+					<HFHeatmap tx={heatSites.tx} rx={heatSites.rx} map={heatmap} frame={heatFrame} />
+				</div>
+				{@const hour = String(heatmap.frames[heatFrame]?.hour_utc ?? '').padStart(2, '0')}
+				{#if heatmap.frames.length > 1}
+					<label class="flex items-center gap-3 text-sm">
+						<span class="w-24 shrink-0 font-mono tabular-nums">{hour}:00 UTC</span>
+						<input
+							type="range"
+							name="map_hour"
+							class="w-full accent-primary"
+							min="0"
+							max={heatmap.frames.length - 1}
+							step="1"
+							aria-label="Hour of the map"
+							aria-valuetext="{hour}:00 UTC"
+							bind:value={heatFrame}
+						/>
+					</label>
+				{:else}
+					<p class="font-mono text-sm tabular-nums">{hour}:00 UTC</p>
+				{/if}
+				<div class="flex items-center gap-2 text-xs text-muted-foreground">
+					<span>0 %</span>
+					<span class="h-2 flex-1 rounded" style:background="linear-gradient(to right, {[0, 25, 50, 75, 100].map(heat).join(', ')})"></span>
+					<span>100 %</span>
+				</div>
+				<p class="text-xs text-muted-foreground">
+					Circuit reliability from A (TX) to the centre of each {heatmap.step_deg}° cell, B (RX) is marked for reference. Antennas count as isotropic
+					with their main lobe gain. Cells without colour could not be calculated.
+				</p>
+			{:else if heatBusy}
+				<Skeleton class="h-64 w-full" />
+			{/if}
+		</section>
+	{/if}
 	{#if points?.length}
 		<div class="grid gap-4 md:grid-cols-2">
 			<LineChart

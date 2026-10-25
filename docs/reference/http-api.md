@@ -82,6 +82,15 @@ quantity does not apply to the path. Beyond 7000 km the model reports the field 
 single modes, so `dominant_mode` is `NONE` there. `overall_reliability_pct` is only calculated for digital
 modulation up to 9000 km and is 0 otherwise; use `basic_reliability_pct` for analog modulation.
 
+`POST /api/hf/maps` (scope `hf:read`, session) answers the same question for the whole globe: the circuit from one
+site to the centre of every 10 degree cell, for one frequency and the requested hours, with isotropic antennas
+(`tx_gain_dbi`, `rx_gain_dbi`). The body is that of a prediction with `site_id` instead of the two sites, one
+`frequency_mhz` instead of a list and no antennas or `long_path`. The answer has `step_deg`, `rows`, `cols` and a frame
+in `frames` per hour, each with `reliability_pct`: one integer per cell, rows from north to south and cells from west
+to east, the same reliability as in the prediction (overall for digital modulation up to 9000 km, basic otherwise).
+The value -307 marks a cell the model could not calculate. A map is up to 15000 runs of the model, so it counts
+against its own limit of 6 maps per user and minute (429 beyond that); otherwise the errors are those of a prediction.
+
 ## Errors
 
 Every error of the JSON API is an RFC 7807 problem (`application/problem+json`) with `title`, `status` and

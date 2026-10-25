@@ -243,6 +243,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/hf/maps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * HF reliability map from a site to every cell of the globe (ITU-R P.533), nothing is stored
+         * @description API token scope: `hf:read`.
+         */
+        post: operations["predict-hf-map"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/hf/predictions": {
         parameters: {
             query?: never;
@@ -1084,6 +1104,96 @@ export interface components {
              * @description Time window
              */
             tw_ms: number;
+        };
+        HFMap: {
+            /** Format: int64 */
+            cols: number;
+            /** @description One frame per requested hour, in the order of the request */
+            frames: components["schemas"]["HFMapFrame"][];
+            /** Format: int64 */
+            rows: number;
+            /**
+             * Format: double
+             * @description Edge of a cell in degrees; the first cell is centred half a step south of 90 N and east of 180 W
+             */
+            step_deg: number;
+        };
+        HFMapFrame: {
+            /** Format: int64 */
+            hour_utc: number;
+            /** @description Circuit reliability in percent per cell, rows from north to south and cells from west to east; -307 where the model could not calculate the cell */
+            reliability_pct: number[];
+        };
+        HFMapInput: {
+            /**
+             * Format: double
+             * @description 0.005 Hz to 3 MHz
+             */
+            bandwidth_hz: number;
+            /** @description Digital modulation parameters; without them the defaults of the ITU program apply (required SIR 10 dB, all others 0) */
+            digital?: components["schemas"]["HFDigital"];
+            /**
+             * Format: double
+             * @description Frequency, 1 to 30 MHz
+             */
+            frequency_mhz: number;
+            /** @description UTC hours, 1 to 24, at most 24 values; the map has one frame per hour */
+            hours_utc: number[];
+            /**
+             * @description analog without a value
+             * @enum {string}
+             */
+            modulation?: "analog" | "digital";
+            /**
+             * Format: int64
+             * @description Month, 1 to 12
+             */
+            month: number;
+            /**
+             * @description Man-made noise environment, ITU-R P.372
+             * @enum {string}
+             */
+            noise_environment: "city" | "residential" | "rural" | "quiet_rural" | "noisy" | "quiet";
+            /**
+             * Format: double
+             * @description Required signal-to-noise ratio, -30 to 200
+             */
+            required_snr_db: number;
+            /**
+             * Format: double
+             * @description Gain of the isotropic antenna at every cell
+             */
+            rx_gain_dbi?: number;
+            /**
+             * Format: int64
+             * @description Transmitting site; the map shows the circuit from it to every cell of the globe
+             */
+            site_id: number;
+            /**
+             * Format: int64
+             * @description Share of the month, 1 to 99
+             */
+            snr_percentile: number;
+            /**
+             * Format: int64
+             * @description 12-month smoothed sunspot number R12, 1 to 311
+             */
+            ssn: number;
+            /**
+             * Format: double
+             * @description Gain of the isotropic antenna at the site
+             */
+            tx_gain_dbi?: number;
+            /**
+             * Format: double
+             * @description Transmitter power in dB(1 kW), -30 to 60
+             */
+            tx_power_dbw: number;
+            /**
+             * Format: int64
+             * @description Year, 1900 to 2100
+             */
+            year: number;
         };
         HFPoint: {
             /**
@@ -2759,6 +2869,84 @@ export interface operations {
             };
             /** @description Internal Server Error */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "predict-hf-map": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HFMapInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HFMap"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
