@@ -2,7 +2,7 @@
 
 The app uses the same JSON API that other programs can use, under `/api`. It is
 described by OpenAPI 3.1 at `/api/openapi.json` (for logged-in users and tokens only),
-shown as an interactive reference at `/api-reference` in the app, generated from the Go types with
+shown as an interactive reference at `/account/api-reference` in the app, generated from the Go types with
 [huma](https://huma.rocks) (`internal/web/api.go`, operations next to their
 resource in `sites.go`, `links.go`, `coverages.go`, ...). Errors are RFC 7807
 problem details; invalid input answers 422 with one entry per field in
@@ -13,8 +13,8 @@ HTTP routes next to the API, as are their shared variants under `/s/`.
 
 ## Authentication
 
-The web app uses the session cookie. Other programs send a personal API token, created on the **API tokens** page
-of the app ([how-to](../how-to/use-the-api-with-a-token.md)), as `Authorization: Bearer rp_<43 characters>`.
+The web app uses the session cookie. Other programs send a personal API token, created under **Account → API tokens**
+in the app ([how-to](../how-to/use-the-api-with-a-token.md)), as `Authorization: Bearer rp_<43 characters>`.
 
 - A request with an `Authorization` header is judged by the token alone, never by a cookie it also carries.
 - Every operation names the scope a token needs (`security` in the description, "API token scope" in its text):
@@ -28,7 +28,8 @@ of the app ([how-to](../how-to/use-the-api-with-a-token.md)), as `Authorization:
   | `account:read` | `GET /api/me` |
 
   A write scope is stored together with the read scope of the same resource. Account settings
-  (`/api/me/email`, `/api/me/password`) and token management (`/api/me/tokens`) need a session.
+  (`/api/me/email`, `/api/me/password`, `DELETE /api/me/sessions`, which logs out every other session and
+  answers `{"count": n}`) and token management (`/api/me/tokens`) need a session.
 - A token has an optional expiry; without one it lives until it is revoked. Expired tokens stay listed for 30 days.
 - Answers: 401 with `WWW-Authenticate: Bearer` for a malformed, unknown, expired or revoked token; 403 when the
   scope is missing or the operation needs a session; 429 after 20 bad tokens per IP in 15 minutes or 300 requests

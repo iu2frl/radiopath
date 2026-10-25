@@ -21,11 +21,12 @@ taken: the mail to that address says what happened (a confirmation link, "you
 already have an account", or "the name is taken"), so only its owner learns it.
 Logging in with the right password before confirming offers a button for a
 fresh link (3 per account per hour). Under
-the user name in the header, `/account` changes the address (the password is
-required, so a stolen session cannot redirect the reset mails; again by
-confirmation link, the old address stays until then and gets a notice
-afterwards) and the password (the old one is required, every other session is
-logged out). `/forgot` mails a reset link (one hour) and answers the same
+the user name in the header, **Account** changes the address on its Profile tab
+(the password is required, so a stolen session cannot redirect the reset mails;
+again by confirmation link, the old address stays until then and gets a notice
+afterwards) and on its Security tab the password (the old one is required, every
+other session is logged out) or just logs out every other device; the API
+tokens and the API reference have their own tabs. `/forgot` mails a reset link (one hour) and answers the same
 whether or not the address is known. Mails go out in the background, so the
 response time does not tell either, and an unknown name costs the same bcrypt
 work at login as a known one. Links are random tokens stored hashed, like

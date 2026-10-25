@@ -225,6 +225,12 @@ func (s *Store) DeleteSession(ctx context.Context, id string) error {
 	return err
 }
 
+// DeleteOtherSessions deletes every session of the user except keepID and returns how many.
+func (s *Store) DeleteOtherSessions(ctx context.Context, userID int64, keepID string) (int64, error) {
+	tag, err := s.pool.Exec(ctx, `DELETE FROM sessions WHERE user_id = $1 AND id <> $2`, userID, keepID)
+	return tag.RowsAffected(), err
+}
+
 // DeleteAllSessions deletes every session and returns how many.
 func (s *Store) DeleteAllSessions(ctx context.Context) (int64, error) {
 	tag, err := s.pool.Exec(ctx, `DELETE FROM sessions`)

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
+	import { createQuery } from '@tanstack/svelte-query';
 	import { onMount } from 'svelte';
 	import { toast } from 'svelte-sonner';
 	import { api, call } from '$lib/api';
@@ -8,17 +8,13 @@
 	import { Input } from '$lib/components/ui/input';
 	import Field from '$lib/Field.svelte';
 	import FormErrors from '$lib/FormErrors.svelte';
-	import { invalid, notifyError } from '$lib/notify';
-	import PageHead from '$lib/PageHead.svelte';
+	import { notifyError } from '$lib/notify';
+	import SettingsSection from '$lib/SettingsSection.svelte';
 
-	const queryClient = useQueryClient();
 	// The page needs a login: call() sends a guest there on 401.
 	const me = createQuery(() => ({ queryKey: ['me', 'account'], queryFn: () => call(api.GET('/api/me')) }));
 	let email = $state('');
 	let emailPassword = $state('');
-	let current = $state('');
-	let password = $state('');
-	let password2 = $state('');
 
 	// The confirmation link of a new address leads here.
 	onMount(() => {
@@ -44,59 +40,38 @@
 			notifyError(err);
 		}
 	}
-
-	/** Changes the password; every other session ends, this one gets a fresh cookie. */
-	async function changePassword(e: SubmitEvent) {
-		e.preventDefault();
-		if (password !== password2) return notifyError(invalid('Passwords do not match'));
-		try {
-			await call(api.PUT('/api/me/password', { body: { current, password } }));
-			current = password = password2 = '';
-			toast.success('Password changed. Other devices have been logged out.');
-			await queryClient.invalidateQueries({ queryKey: ['me'] });
-		} catch (err) {
-			notifyError(err);
-		}
-	}
 </script>
 
-<div class="mx-auto mt-10 w-full max-w-[26rem]">
-	<PageHead title="Account" />
-	<FormErrors error={me.error} />
-	{#if me.data}
-		<form class="grid gap-3 rounded-lg border bg-card p-4" onsubmit={changeEmail}>
+<svelte:head><title>Profile – Radiopath</title></svelte:head>
+<FormErrors error={me.error} />
+{#if me.data}
+	<SettingsSection title="Profile">
+		{#snippet description()}Your user name and the address for password resets and notices, such as a new API token.{/snippet}
+		<form class="grid gap-3" aria-label="Change address" onsubmit={changeEmail}>
 			<Field label="User name"><Input value={me.data.name} disabled /></Field>
-			<Field label="Email"><Input name="email" type="email" autocomplete="email" required bind:value={email} /></Field>
-			<Field label="Password"
-				><Input name="email_password" type="password" autocomplete="current-password" required bind:value={emailPassword} /></Field
-			>
+			<p class="-mt-1 text-xs text-muted-foreground">The user name cannot be changed.</p>
+			<Field label="Email">
+				<div class="flex items-center gap-2">
+					<Input name="email" type="email" autocomplete="email" required bind:value={email} />
+					{#if me.data.email}
+						<span class="shrink-0 border border-ok px-1.5 py-px text-xs font-medium text-ok">Confirmed</span>
+					{:else}
+						<span class="shrink-0 border border-warn px-1.5 py-px text-xs font-medium text-warn">No address</span>
+					{/if}
+				</div>
+			</Field>
+			<Field label="Password">
+				<Input name="email_password" type="password" autocomplete="current-password" required bind:value={emailPassword} />
+			</Field>
+			<p class="text-xs text-muted-foreground">
+				{#if me.data.email}
+					A new address takes effect once you open the confirmation link we send there; the old one gets a notice. Password reset mails go to the
+					confirmed address.
+				{:else}
+					No address on file: without one there is no password reset.
+				{/if}
+			</p>
 			<div><Button type="submit">Change address</Button></div>
 		</form>
-		<p class="mt-2 text-xs text-muted-foreground">
-			{#if me.data.email}
-				A new address takes effect once you open the confirmation link we send there; the old one gets a notice. Password reset mails go to the
-				confirmed address.
-			{:else}
-				No address on file: without one there is no password reset.
-			{/if}
-		</p>
-		<form class="mt-4 grid gap-3 rounded-lg border bg-card p-4" onsubmit={changePassword}>
-			<Field label="Current password"><Input name="current" type="password" autocomplete="current-password" required bind:value={current} /></Field>
-			<Field label="New password">
-				<Input name="password" type="password" autocomplete="new-password" minlength={10} required bind:value={password} />
-			</Field>
-			<Field label="Repeat"
-				><Input name="password2" type="password" autocomplete="new-password" minlength={10} required bind:value={password2} /></Field
-			>
-			<div><Button type="submit">Change password</Button></div>
-		</form>
-		<p class="mt-2 text-xs text-muted-foreground">At least 10 characters. Changing it logs out every other device; API tokens keep working.</p>
-		<div class="mt-4 flex items-center justify-between gap-3 rounded-lg border bg-card p-4">
-			<div>
-				<div class="text-sm font-medium">API tokens</div>
-				<div class="text-xs text-muted-foreground">Let other programs use the API on your behalf.</div>
-			</div>
-			<Button variant="outline" href="/tokens">Manage</Button>
-		</div>
-	{/if}
-</div>
+	</SettingsSection>
+{/if}

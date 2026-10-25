@@ -143,7 +143,7 @@ type EmailOutput struct {
 	Status int
 }
 
-// registerAccount registers the changes of the logged-in user's address and password; both need a session, not a token.
+// registerAccount registers the changes of the logged-in user's address, password and sessions; all need a session, not a token.
 func (s *Server) registerAccount(api huma.API) {
 	o := op("set-my-email", http.MethodPut, "/api/me/email", scopeSession, "Change the address of the account")
 	o.DefaultStatus = http.StatusAccepted
@@ -198,6 +198,25 @@ func (s *Server) registerAccount(api huma.API) {
 		s.Log.Info("password changed", "user", u.Name)
 		return &SessionOutput{SetCookie: c}, nil
 	})
+
+	huma.Register(api, op("delete-my-other-sessions", http.MethodDelete, "/api/me/sessions", scopeSession, "Log out every other session of the account"),
+		func(ctx context.Context, _ *struct{}) (*SessionsOutput, error) {
+			u := userOf(ctx)
+			n, err := s.Store.DeleteOtherSessions(ctx, u.ID, sessionID(reqInfo(ctx).cookie))
+			if err != nil {
+				return nil, s.storeErr(err)
+			}
+			s.Log.Info("other sessions revoked", "user", u.Name, "count", n)
+			out := &SessionsOutput{}
+			out.Body.Count = n
+			return out, nil
+		})
+}
+
+type SessionsOutput struct {
+	Body struct {
+		Count int64 `json:"count" doc:"How many sessions were logged out"`
+	}
 }
 
 // checkPassword returns a 422 at field unless password is the one of u.

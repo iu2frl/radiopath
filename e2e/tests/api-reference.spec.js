@@ -2,12 +2,13 @@ import { test, expect, login, pathname, userMenu } from '../helpers.js'
 
 const user = 'reference'
 
-test('shows the API reference from the user menu', async ({ page }) => {
+test('shows the API reference under Account', async ({ page }) => {
   await login(page, user)
   await page.goto('/sites')
   await userMenu(page)
-  await page.getByRole('menuitem', { name: 'API reference' }).click()
-  await expect.poll(() => pathname(page)).toBe('/api-reference')
+  await page.getByRole('menuitem', { name: 'Account' }).click()
+  await page.getByRole('navigation', { name: 'Account' }).getByRole('link', { name: 'API reference' }).click()
+  await expect.poll(() => pathname(page)).toBe('/account/api-reference')
   // rendered by Scalar from the private description; the page fixture fails on anything the CSP blocks
   await expect(page.locator('.api-reference').getByRole('heading', { name: 'Radiopath API' })).toBeVisible({ timeout: 20000 })
   // operations are grouped by resource, the token management among them
@@ -20,7 +21,7 @@ test('shows the API reference from the user menu', async ({ page }) => {
 
 test('rebuilds the reference on a theme switch', async ({ page }) => {
   await login(page, user)
-  await page.goto('/api-reference')
+  await page.goto('/account/api-reference')
   const heading = page.locator('.api-reference').getByRole('heading', { name: 'Radiopath API' })
   await expect(heading).toBeVisible({ timeout: 20000 })
   const dark = await page.evaluate(() => document.documentElement.dataset.theme === 'dark')
@@ -31,6 +32,6 @@ test('rebuilds the reference on a theme switch', async ({ page }) => {
 })
 
 test('sends a guest to the login', async ({ page }) => {
-  await page.goto('/api-reference')
+  await page.goto('/account/api-reference')
   await expect.poll(() => pathname(page)).toBe('/login')
 })

@@ -9,12 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Log in with the user name or the confirmed address of the account (by @HB9HIL)
-- Personal API tokens for other programs and scripts, under API tokens in the user menu: access per resource (none, read, read and write), an expiration date or none, shown once, revocable at any time; creating one needs the password and is mailed to the confirmed address (by @HB9HIL)
-- An interactive API reference in the app (API reference in the user menu), with the scope of every operation, code examples and test requests; bundled, nothing is loaded from outside (by @HB9HIL)
+- Personal API tokens for other programs and scripts, under Account → API tokens: access per resource (none, read, read and write), an expiration date or none, shown once, revocable at any time; creating one needs the password and is mailed to the confirmed address (by @HB9HIL)
+- Log out every other device of the account under Account → Security (by @HB9HIL)
+- An interactive API reference in the app (Account → API reference), with the scope of every operation, code examples and test requests; bundled, nothing is loaded from outside (by @HB9HIL)
 - JSON API under `/api`, described by OpenAPI at `/api/openapi.json` for logged-in users; the web app is built on it, other programs can use it too (by @HB9HIL)
 - The app and the admin panel send a Content-Security-Policy: scripts only from the app itself and its own inline scripts by hash, no plugins, no framing, no connections elsewhere (by @HB9HIL)
 
 ### Changed
+- The account page is split into the tabs Profile, Security, API tokens and API reference, each section with its explanation next to the form (by @HB9HIL)
 - Login, registration and the password pages share one centred layout that fits phones; apart from the login page they are not indexed by search engines (by @HB9HIL)
 - The web interface is a SvelteKit app embedded in the binary instead of server-rendered pages: no reload after saving, a coverage page picks up its finished job by itself. Page, share and mail link URLs stay the same; only the admin panel is still rendered by the server (by @HB9HIL)
 - Rasters, reports and job events answer 401 without a session instead of redirecting to the login (by @HB9HIL)

@@ -22,7 +22,7 @@ var publicOps = map[string]bool{
 
 // Operations only a session may call: account settings and the API tokens themselves.
 var sessionOps = map[string]bool{
-	"set-my-email": true, "set-my-password": true, "list-my-tokens": true, "create-my-token": true, "delete-my-token": true,
+	"set-my-email": true, "set-my-password": true, "delete-my-other-sessions": true, "list-my-tokens": true, "create-my-token": true, "delete-my-token": true,
 }
 
 func TestAPISecurity(t *testing.T) {

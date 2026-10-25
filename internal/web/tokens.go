@@ -235,7 +235,7 @@ func (s *Server) registerTokens(api huma.API) {
 			if t.ExpiresAt != nil {
 				expires = t.ExpiresAt.UTC().Format("2 Jan 2006 15:04 UTC")
 			}
-			s.mailLater(u.Email, "New Radiopath API token", fmt.Sprintf(tokenCreatedMail, u.Name, name, strings.Join(scopes, ", "), expires, s.BaseURL+"/tokens"))
+			s.mailLater(u.Email, "New Radiopath API token", fmt.Sprintf(tokenCreatedMail, u.Name, name, strings.Join(scopes, ", "), expires, s.BaseURL+"/account/tokens"))
 		}
 		return &struct{ Body CreatedToken }{CreatedToken{Token: toToken(t), Secret: secret}}, nil
 	})

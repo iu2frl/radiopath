@@ -21,13 +21,13 @@ test.beforeAll(async ({ browser }) => {
 test.beforeEach(({ page }) => login(page, user))
 
 test('starts with an empty list', async ({ page }) => {
-  await page.goto('/tokens')
-  await expect(c(page, 'h1', 'API tokens')).toBeVisible()
+  await page.goto('/account/tokens')
+  await expect(page.getByRole('navigation', { name: 'Account' }).getByRole('link', { name: 'API tokens' })).toHaveAttribute('aria-current', 'page')
   await expect(page.getByText('No tokens yet')).toBeVisible()
 })
 
 test('refuses a wrong password', async ({ page }) => {
-  await page.goto('/tokens')
+  await page.goto('/account/tokens')
   await c(page, 'button', 'Create token').click()
   const form = page.getByRole('form', { name: 'Create token' })
   await form.locator('[name=name]').fill('Wrong')
@@ -38,7 +38,7 @@ test('refuses a wrong password', async ({ page }) => {
 })
 
 test('creates a token and shows it once', async ({ page }) => {
-  await page.goto('/tokens')
+  await page.goto('/account/tokens')
   await c(page, 'button', 'Create token').click()
   const dialog = page.getByRole('dialog')
   const create = dialog.getByRole('button', { name: 'Create token' })
@@ -58,7 +58,7 @@ test('creates a token and shows it once', async ({ page }) => {
   await expect(row).toContainText(secret.slice(0, 11))
   await expect(row).toContainText('sites:read')
   await expect(page.getByText(secret)).toHaveCount(0)
-  expect(await mailLink(page, address, 'New Radiopath API token')).toMatch(/\/tokens$/)
+  expect(await mailLink(page, address, 'New Radiopath API token')).toMatch(/\/account\/tokens$/)
 })
 
 test('reaches what its scopes allow and nothing else', async ({ page }) => {
@@ -77,7 +77,7 @@ test('reaches what its scopes allow and nothing else', async ({ page }) => {
 })
 
 test('creates a token without expiration', async ({ page }) => {
-  await page.goto('/tokens')
+  await page.goto('/account/tokens')
   await c(page, 'button', 'Create token').click()
   const dialog = page.getByRole('dialog')
   await dialog.locator('[name=name]').fill('Forever')
@@ -94,7 +94,7 @@ test('creates a token without expiration', async ({ page }) => {
 })
 
 test('revokes a token', async ({ page }) => {
-  await page.goto('/tokens')
+  await page.goto('/account/tokens')
   await rowAction(page, 'Logbook', 'Revoke')
   await confirmDialog(page, 'Revoke')
   await expect(toast(page, 'Token Logbook revoked')).toBeVisible()

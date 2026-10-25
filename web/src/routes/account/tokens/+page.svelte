@@ -1,5 +1,4 @@
 <script lang="ts">
-	import BookOpen from '@lucide/svelte/icons/book-open';
 	import KeyRound from '@lucide/svelte/icons/key-round';
 	import Plus from '@lucide/svelte/icons/plus';
 	import Trash from '@lucide/svelte/icons/trash';
@@ -15,7 +14,6 @@
 	import FormErrors from '$lib/FormErrors.svelte';
 	import ListSkeleton from '$lib/ListSkeleton.svelte';
 	import { notifyError } from '$lib/notify';
-	import PageHead from '$lib/PageHead.svelte';
 	import RowActions from '$lib/RowActions.svelte';
 	import TokenDialog, { scopeSummary } from '$lib/TokenDialog.svelte';
 
@@ -45,14 +43,15 @@
 	}
 </script>
 
-<PageHead title="API tokens">
-	<Button variant="outline" href="/api-reference"><BookOpen />API reference</Button>
+<svelte:head><title>API tokens – Radiopath</title></svelte:head>
+<div class="mb-4 flex flex-wrap items-start justify-between gap-3">
+	<p class="max-w-3xl text-sm text-muted-foreground">
+		Tokens let other programs and scripts use the Radiopath API on your behalf. Each one reaches only what you allowed when you created it; revoke a
+		token as soon as a program no longer needs it. The <a class="text-primary hover:underline" href="/account/api-reference">API reference</a> lists what
+		they can do.
+	</p>
 	<Button onclick={() => (creating = true)}><Plus />Create token</Button>
-</PageHead>
-<p class="mb-4 max-w-3xl text-sm text-muted-foreground">
-	Tokens let other programs, such as a logbook, use the Radiopath API on your behalf. Each one reaches only what you allowed when you created it;
-	revoke a token as soon as a program no longer needs it.
-</p>
+</div>
 <FormErrors error={tokens.error} />
 {#if tokens.isPending}
 	<ListSkeleton />

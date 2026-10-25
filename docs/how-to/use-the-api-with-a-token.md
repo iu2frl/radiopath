@@ -4,7 +4,7 @@ Let another program, such as a logbook or a script, read or change your Radiopat
 
 ## 1. Create a token
 
-1. Log in and open **API tokens** in the menu under your user name.
+1. Log in, open **Account** in the menu under your user name and switch to the **API tokens** tab.
 2. Choose **Create token** and give it a name that says which program uses it, for example `logbook sync`.
 3. Pick an expiration. Prefer a date; **No expiration** keeps the token working until you revoke it.
 4. Give each resource only the access the program needs: **No access**, **Read** or **Read & write** (write includes
@@ -22,7 +22,7 @@ Send the token in the `Authorization` header:
 curl -H "Authorization: Bearer rp_..." https://radiopath.example.org/api/sites
 ```
 
-**API reference** in the same menu lists every operation with the scope it needs, its parameters, examples in
+The **API reference** tab next to it lists every operation with the scope it needs, its parameters, examples in
 several languages and a **Test request** button. Rasters, PDF reports and job events (`/links/{id}/report.pdf`,
 `/coverages/{id}/image.png`, …) take the same header with the `links:read` or `coverages:read` scope.
 
@@ -35,7 +35,7 @@ What the answers mean:
 
 ## 3. Revoke a token
 
-On **API tokens**, open the row menu of the token and choose **Revoke**. The program loses access at once. Changing
+On **Account → API tokens**, open the row menu of the token and choose **Revoke**. The program loses access at once. Changing
 your password does not revoke tokens, so revoke any you no longer recognise. Expired tokens stay in the list for 30
 days, marked *Expired*, and are deleted then.
 

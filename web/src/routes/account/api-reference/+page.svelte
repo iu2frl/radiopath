@@ -1,10 +1,7 @@
 <script lang="ts">
-	import KeyRound from '@lucide/svelte/icons/key-round';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { onMount } from 'svelte';
 	import { api, call } from '$lib/api';
-	import { Button } from '$lib/components/ui/button';
-	import PageHead from '$lib/PageHead.svelte';
 	import { theme } from '$lib/theme.svelte';
 
 	// The description needs a login; call() sends a guest there on 401.
@@ -64,13 +61,12 @@
 	});
 </script>
 
-<PageHead title="API reference">
-	<Button href="/tokens"><KeyRound />API tokens</Button>
-</PageHead>
+<svelte:head><title>API reference – Radiopath</title></svelte:head>
 {#if me.data}
 	<p class="mb-4 max-w-3xl text-sm text-muted-foreground">
-		Send an API token as <span class="font-mono">Authorization: Bearer rp_…</span> to {location.origin}/api. Each operation lists the scope a token
-		needs; "Test request" runs it in your browser with your login or a token you enter.
+		Send an <a class="text-primary hover:underline" href="/account/tokens">API token</a> as
+		<span class="font-mono">Authorization: Bearer rp_…</span> to {location.origin}/api. Each operation lists the scope a token needs; "Test request"
+		runs it in your browser with your login or a token you enter.
 	</p>
 {/if}
 <div class="api-reference -mx-4 border-y bg-card sm:mx-0 sm:border" bind:this={el}></div>
