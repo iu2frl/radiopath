@@ -260,15 +260,17 @@ func run(ctx context.Context, cfg config, log *slog.Logger) error {
 		canopy = dem.NewDirCanopy(cfg.canopyDir, cfg.demCacheTiles)
 		log.Info("canopy source", "dir", cfg.canopyDir)
 	}
+	var hfData *hf.Data
 	if cfg.hfDir != "" {
-		// Fail at startup on a missing data set; the model has no API consumer yet.
-		if _, err := hf.Open(cfg.hfDir, ""); err != nil {
+		var err error
+		if hfData, err = hf.Open(cfg.hfDir, ""); err != nil {
 			return fmt.Errorf("hf data dir: %w", err)
 		}
 		log.Info("hf data", "dir", cfg.hfDir)
 	}
 	srv := &web.Server{
 		Store:        st,
+		HF:           hfData,
 		Analyzer:     link.Calculator{DEM: src, Canopy: canopy},
 		Tiles:        proxy,
 		DEMReady:     demReady,

@@ -27,6 +27,28 @@ HTTP routes next to the API, as are their shared variants under `/s/`.
 
 Without a session these routes answer 401; the web app sends the browser to the login.
 
+## HF prediction
+
+`POST /api/hf/predictions` (scope `hf:read`, session) predicts an HF circuit between two of the user's sites with
+ITU-R P.533-14 and P.372 (`internal/hf`) and stores nothing. It answers 503 until `RADIOPATH_HF_DIR` points at the
+ITU data set, and 404 for a site of another user. The body names the sites and the conditions:
+
+```json
+{
+  "site_a_id": 1, "site_b_id": 2,
+  "year": 2026, "month": 4, "hours_utc": [6, 12, 18], "ssn": 60,
+  "frequencies_mhz": [7.1, 14.2],
+  "tx_power_dbw": 0, "bandwidth_hz": 3000, "required_snr_db": 15, "snr_percentile": 90,
+  "noise_environment": "rural"
+}
+```
+
+At most 24 hours and 30 frequencies (1 to 30 MHz). Antennas are isotropic with `tx_gain_dbi` and `rx_gain_dbi`;
+`modulation` is `analog` or `digital` (with optional `digital` parameters), `long_path` takes the long way round the
+globe. The answer has one entry in `points` per hour and frequency: MUFs, field strength, receiver power, noise,
+SNR, circuit reliability and the dominant mode with its delay, elevation and loss. The value -307 means that the
+quantity does not apply to the path.
+
 ## Errors
 
 Every error of the JSON API is an RFC 7807 problem (`application/problem+json`) with `title`, `status` and

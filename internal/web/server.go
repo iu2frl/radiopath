@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/radiopath/radiopath/internal/hf"
 	"github.com/radiopath/radiopath/internal/link"
 	"github.com/radiopath/radiopath/internal/mail"
 	"github.com/radiopath/radiopath/internal/store"
@@ -31,6 +32,7 @@ type base struct {
 type Server struct {
 	Store        *store.Store
 	Analyzer     link.Analyzer
+	HF           *hf.Data // nil without RADIOPATH_HF_DIR; the HF operation answers 503
 	Tiles        *tiles.Proxy
 	DEMReady     func() error
 	Registration bool
