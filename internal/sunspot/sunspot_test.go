@@ -123,3 +123,19 @@ func TestRunStops(t *testing.T) {
 		t.Error("Run did not stop")
 	}
 }
+
+// TestMissingField skips months whose value field is missing, as after a change of the NOAA format, instead of
+// serving them as a sunspot number of 1.
+func TestMissingField(t *testing.T) {
+	srv := serve(t, `[{"time-tag": "2026-03", "ssn": 86.6, "smoothed_ssn": 94.4}]`, `[{"time-tag": "2026-10", "predicted": 87.9}]`)
+	s := New(srv.URL)
+	if err := s.Refresh(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := s.Lookup(2026, 10); ok {
+		t.Error("a prediction without its value field was served")
+	}
+	if v, ok := s.Lookup(2026, 3); !ok || v.SSN != 94 {
+		t.Errorf("observed value: %+v %v", v, ok)
+	}
+}

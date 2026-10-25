@@ -53,18 +53,18 @@ func (s *Source) Lookup(year, month int) (Value, bool) {
 }
 
 // Refresh loads both files and replaces the values; on an error the old values stay. A smoothed observation wins over
-// a prediction of the same month.
+// a prediction of the same month. Values are pointers so a field NOAA renames or drops is skipped instead of read as 0.
 func (s *Source) Refresh(ctx context.Context) error {
 	var observed []struct {
-		Month    string  `json:"time-tag"`
-		Smoothed float64 `json:"smoothed_ssn"` // -1 where it cannot be calculated yet
+		Month    string   `json:"time-tag"`
+		Smoothed *float64 `json:"smoothed_ssn"` // -1 where it cannot be calculated yet
 	}
 	if err := s.get(ctx, "observed-solar-cycle-indices.json", &observed); err != nil {
 		return err
 	}
 	var predicted []struct {
-		Month     string  `json:"time-tag"`
-		Predicted float64 `json:"predicted_ssn"`
+		Month     string   `json:"time-tag"`
+		Predicted *float64 `json:"predicted_ssn"`
 	}
 	if err := s.get(ctx, "predicted-solar-cycle.json", &predicted); err != nil {
 		return err
@@ -72,11 +72,13 @@ func (s *Source) Refresh(ctx context.Context) error {
 
 	months := make(map[string]Value, len(observed)+len(predicted))
 	for _, p := range predicted {
-		months[p.Month] = Value{SSN: limit(p.Predicted), Predicted: true}
+		if p.Predicted != nil && *p.Predicted >= 0 {
+			months[p.Month] = Value{SSN: limit(*p.Predicted), Predicted: true}
+		}
 	}
 	for _, o := range observed {
-		if o.Smoothed >= 0 {
-			months[o.Month] = Value{SSN: limit(o.Smoothed)}
+		if o.Smoothed != nil && *o.Smoothed >= 0 {
+			months[o.Month] = Value{SSN: limit(*o.Smoothed)}
 		}
 	}
 	if len(months) == 0 {
