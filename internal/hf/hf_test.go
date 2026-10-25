@@ -540,3 +540,31 @@ func TestPatternAntennaMatchesIsotropic(t *testing.T) {
 		t.Errorf("aimed %.1f dB not above the wrong way %.1f dB", aimed.Points[0].FieldStrength, opposite.Points[0].FieldStrength)
 	}
 }
+
+// TestMonthRetry checks that a month whose files were missing loads once they are back.
+func TestMonthRetry(t *testing.T) {
+	src, _ := testDirs(t)
+	src, err := filepath.Abs(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	link := func(name string) {
+		if err := os.Symlink(filepath.Join(src, name), filepath.Join(dir, name)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	link("P1239-3 Decile Factors.txt")
+	d, err := Open(dir, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.month(3); err == nil {
+		t.Fatal("month without its files loaded")
+	}
+	link("ionos04.bin")
+	link("COEFF04W.txt")
+	if _, err := d.month(3); err != nil {
+		t.Fatalf("month after the files are back: %v", err)
+	}
+}

@@ -21,13 +21,12 @@ type Data struct {
 	months [12]monthData
 }
 
-// monthData is the cached, read-only data of one month.
+// monthData is the cached, read-only data of one month; coeff is nil until it is loaded.
 type monthData struct {
-	once  sync.Once
+	mu    sync.Mutex
 	foF2  *ionMap
 	m3k   *ionMap
 	coeff *p372.Coefficients
-	err   error
 }
 
 // Open prepares the data of the model. p533Dir holds ionosNN.bin and
@@ -62,17 +61,25 @@ func (d *Data) Ready() error {
 	return nil
 }
 
-// month returns the data of a month (0-11), loading it on first use.
+// month returns the data of a month (0-11), loading it on first use. Only a complete load is kept, so a failed read
+// is tried again by the next call instead of failing that month until a restart.
 func (d *Data) month(m int) (*monthData, error) {
 	md := &d.months[m]
-	md.once.Do(func() {
-		md.foF2, md.m3k, md.err = readIonParametersBin(m, d.p533Dir)
-		if md.err != nil {
-			return
-		}
-		md.coeff, md.err = p372.LoadCoefficients(d.p372Dir, m)
-	})
-	return md, md.err
+	md.mu.Lock()
+	defer md.mu.Unlock()
+	if md.coeff != nil {
+		return md, nil
+	}
+	foF2, m3k, err := readIonParametersBin(m, d.p533Dir)
+	if err != nil {
+		return nil, err
+	}
+	coeff, err := p372.LoadCoefficients(d.p372Dir, m)
+	if err != nil {
+		return nil, err
+	}
+	md.foF2, md.m3k, md.coeff = foF2, m3k, coeff
+	return md, nil
 }
 
 // Predict runs the model for every hour and frequency of the request, hours in
