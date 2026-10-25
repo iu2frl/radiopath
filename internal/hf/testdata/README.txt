@@ -13,6 +13,6 @@ the decimals of the reference. The data set itself is fetched by scripts/fetch-h
 Regenerate: build ITURHFProp from the P533/P372/ITURHFProp sources of
 https://github.com/ITU-R-Study-Group-3/ITU-R-HF (unmodified, gcc; on Windows -fcommon replaces -z muldefs and
 MakeNoise.c is added to the P372 library), then run
-  internal/hf/testdata/regen.sh PATH/TO/ITURHFProp tmp/dataset/hf1
+  internal/hf/testdata/regen.sh PATH/TO/ITURHFProp tmp/testfiles/hf1
 which fills in the tokens on a temporary copy of every .in file and rewrites the .csv files.
 p372/testdata/noise_vectors.csv was made the same way from MakeNoise.c.

@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -51,7 +52,8 @@ type config struct {
 	demCacheTiles int
 	canopyDir     string
 	canopyPrefix  string
-	datasetDir    string // holds the data sets in versioned subfolders, hf1/ for the HF model
+	hfDir         string // the HF data set folder, empty when there is none
+	hfPrefix      string // its key prefix in the S3 bucket, empty for HF off
 	sunspotURL    string // NOAA SWPC solar cycle files for the HF sunspot number; empty turns the download off
 	listen        string
 	metricsListen string
@@ -72,9 +74,6 @@ type config struct {
 func loadConfig() (config, error) {
 	c := config{
 		databaseURL:   os.Getenv("DATABASE_URL"),
-		demDir:        os.Getenv("RADIOPATH_DEM_DIR"),
-		canopyDir:     os.Getenv("RADIOPATH_CANOPY_DIR"),
-		datasetDir:    os.Getenv("RADIOPATH_DATASET_DIR"),
 		listen:        envOr("RADIOPATH_LISTEN", ":8080"),
 		metricsListen: ":9090",
 		redisURL:      os.Getenv("RADIOPATH_REDIS_URL"),
@@ -106,24 +105,8 @@ func loadConfig() (config, error) {
 	if c.adminToken != "" && len(c.adminToken) < minAdminToken {
 		return c, fmt.Errorf("RADIOPATH_ADMIN_TOKEN must be at least %d characters", minAdminToken)
 	}
-	c.s3 = s3.Client{
-		Endpoint:  os.Getenv("RADIOPATH_DEM_S3_ENDPOINT"),
-		Bucket:    os.Getenv("RADIOPATH_DEM_S3_BUCKET"),
-		Region:    envOr("RADIOPATH_DEM_S3_REGION", "us-east-1"),
-		AccessKey: os.Getenv("RADIOPATH_DEM_S3_ACCESS_KEY"),
-		SecretKey: os.Getenv("RADIOPATH_DEM_S3_SECRET_KEY"),
-	}
-	c.s3Prefix = os.Getenv("RADIOPATH_DEM_S3_PREFIX")
-	c.canopyPrefix = os.Getenv("RADIOPATH_CANOPY_S3_PREFIX")
-	switch {
-	case c.canopyPrefix != "" && c.s3.Bucket == "":
-		return c, errors.New("RADIOPATH_CANOPY_S3_PREFIX needs RADIOPATH_DEM_S3_BUCKET")
-	case c.s3.Bucket != "" && c.s3.Endpoint == "":
-		return c, errors.New("RADIOPATH_DEM_S3_ENDPOINT is required with RADIOPATH_DEM_S3_BUCKET")
-	case c.s3.Bucket != "" && (c.s3.AccessKey == "") != (c.s3.SecretKey == ""):
-		return c, errors.New("RADIOPATH_DEM_S3_ACCESS_KEY and RADIOPATH_DEM_S3_SECRET_KEY must be set together")
-	case c.s3.Bucket == "" && c.demDir == "":
-		return c, errors.New("RADIOPATH_DEM_DIR or RADIOPATH_DEM_S3_BUCKET is required")
+	if err := datasets(&c); err != nil {
+		return c, err
 	}
 	n, err := strconv.Atoi(envOr("RADIOPATH_DEM_CACHE_TILES", "8"))
 	if err != nil || n < 1 {
@@ -168,6 +151,74 @@ func loadConfig() (config, error) {
 		return c, errors.New("RADIOPATH_REGISTRATION needs RADIOPATH_SMTP_HOST: new accounts confirm their address by mail")
 	}
 	return c, nil
+}
+
+// replaced lists the dataset variables of earlier releases and what took their place; a server still configured
+// with one refuses to start rather than run without terrain.
+var replaced = [][2]string{
+	{"RADIOPATH_DEM_DIR", "RADIOPATH_DATASET_DIR"},
+	{"RADIOPATH_DEM_S3_ENDPOINT", "RADIOPATH_DATASET_S3_ENDPOINT"},
+	{"RADIOPATH_DEM_S3_BUCKET", "RADIOPATH_DATASET_S3_BUCKET"},
+	{"RADIOPATH_DEM_S3_PREFIX", "RADIOPATH_DATASET_DEM"},
+	{"RADIOPATH_DEM_S3_REGION", "RADIOPATH_DATASET_S3_REGION"},
+	{"RADIOPATH_DEM_S3_ACCESS_KEY", "RADIOPATH_DATASET_S3_ACCESS_KEY"},
+	{"RADIOPATH_DEM_S3_SECRET_KEY", "RADIOPATH_DATASET_S3_SECRET_KEY"},
+	{"RADIOPATH_CANOPY_DIR", "RADIOPATH_DATASET_CANOPY"},
+	{"RADIOPATH_CANOPY_S3_PREFIX", "RADIOPATH_DATASET_CANOPY"},
+	{"RADIOPATH_HF_DIR", "RADIOPATH_DATASET_HF"},
+}
+
+// datasets fills in where the terrain, canopy and HF data are: one root, a directory or an S3 bucket, with a folder
+// (key prefix) per dataset. An empty RADIOPATH_DATASET_CANOPY or RADIOPATH_DATASET_HF, or a missing folder, means no
+// vegetation model or no HF model.
+func datasets(c *config) error {
+	for _, r := range replaced {
+		if _, ok := os.LookupEnv(r[0]); ok {
+			return fmt.Errorf("%s is no longer read; use %s (see docs/reference/configuration.md)", r[0], r[1])
+		}
+	}
+	demName := envOr("RADIOPATH_DATASET_DEM", "srtm1")
+	canopyName, ok := os.LookupEnv("RADIOPATH_DATASET_CANOPY")
+	if !ok {
+		canopyName = "canopy1"
+	}
+	hfName, ok := os.LookupEnv("RADIOPATH_DATASET_HF")
+	if !ok {
+		hfName = "hf1"
+	}
+	c.s3 = s3.Client{
+		Endpoint:  os.Getenv("RADIOPATH_DATASET_S3_ENDPOINT"),
+		Bucket:    os.Getenv("RADIOPATH_DATASET_S3_BUCKET"),
+		Region:    envOr("RADIOPATH_DATASET_S3_REGION", "us-east-1"),
+		AccessKey: os.Getenv("RADIOPATH_DATASET_S3_ACCESS_KEY"),
+		SecretKey: os.Getenv("RADIOPATH_DATASET_S3_SECRET_KEY"),
+	}
+	root := os.Getenv("RADIOPATH_DATASET_DIR")
+	switch {
+	case c.s3.Bucket != "" && c.s3.Endpoint == "":
+		return errors.New("RADIOPATH_DATASET_S3_ENDPOINT is required with RADIOPATH_DATASET_S3_BUCKET")
+	case c.s3.Bucket != "" && (c.s3.AccessKey == "") != (c.s3.SecretKey == ""):
+		return errors.New("RADIOPATH_DATASET_S3_ACCESS_KEY and RADIOPATH_DATASET_S3_SECRET_KEY must be set together")
+	case c.s3.Bucket != "":
+		c.s3Prefix = demName + "/"
+		if canopyName != "" {
+			c.canopyPrefix = canopyName + "/"
+		}
+		if hfName != "" {
+			c.hfPrefix = hfName + "/"
+		}
+	case root == "":
+		return errors.New("RADIOPATH_DATASET_DIR or RADIOPATH_DATASET_S3_BUCKET is required")
+	default:
+		c.demDir = filepath.Join(root, demName)
+		if fi, err := os.Stat(filepath.Join(root, canopyName)); canopyName != "" && err == nil && fi.IsDir() {
+			c.canopyDir = filepath.Join(root, canopyName)
+		}
+		if fi, err := os.Stat(filepath.Join(root, hfName)); hfName != "" && err == nil && fi.IsDir() {
+			c.hfDir = filepath.Join(root, hfName)
+		}
+	}
+	return nil
 }
 
 // envBool parses key as true/false, falling back to def when unset.
@@ -224,6 +275,40 @@ func main() {
 	}
 }
 
+// openHF opens the HF data set: its folder in the dataset directory, or the files under its key prefix in the S3
+// bucket, downloaded and verified into a temporary directory first (about 130 MB). The returned func removes that
+// directory. Without a folder, or with the files missing from the bucket, the HF model stays off and the result is nil.
+func openHF(ctx context.Context, cfg config, log *slog.Logger) (*hf.Data, func(), error) {
+	dir, cleanup := cfg.hfDir, func() {}
+	if cfg.s3.Bucket != "" && cfg.hfPrefix != "" {
+		tmp, err := os.MkdirTemp("", "radiopath-hf-")
+		if err != nil {
+			return nil, cleanup, err
+		}
+		cleanup = func() { os.RemoveAll(tmp) }
+		err = hf.Fetch(ctx, tmp, func(ctx context.Context, name string) (io.ReadCloser, error) {
+			return cfg.s3.Get(ctx, cfg.hfPrefix+name)
+		})
+		if errors.Is(err, s3.ErrNotFound) {
+			log.Warn("hf data set is not in the bucket, the HF model is off", "err", err)
+			return nil, cleanup, nil
+		}
+		if err != nil {
+			return nil, cleanup, err
+		}
+		dir = tmp
+	}
+	if dir == "" {
+		return nil, cleanup, nil
+	}
+	d, err := hf.Open(dir, "")
+	if err != nil {
+		return nil, cleanup, fmt.Errorf("hf data: %w", err)
+	}
+	log.Info("hf data", "dir", dir, "s3", cfg.hfPrefix != "" && cfg.s3.Bucket != "")
+	return d, cleanup, nil
+}
+
 // run starts the store, workers, janitor, metrics and HTTP server, and shuts them down in order on cancel or listen error.
 func run(ctx context.Context, cfg config, log *slog.Logger) error {
 	log.Info("starting", "version", version, "workers", cfg.workers, "listen", cfg.listen, "metrics", cfg.metricsListen)
@@ -270,14 +355,10 @@ func run(ctx context.Context, cfg config, log *slog.Logger) error {
 		canopy = dem.NewDirCanopy(cfg.canopyDir, cfg.demCacheTiles)
 		log.Info("canopy source", "dir", cfg.canopyDir)
 	}
-	var hfData *hf.Data
-	if cfg.datasetDir != "" {
-		var err error
-		hfDir := filepath.Join(cfg.datasetDir, "hf1")
-		if hfData, err = hf.Open(hfDir, ""); err != nil {
-			return fmt.Errorf("hf data dir: %w", err)
-		}
-		log.Info("hf data", "dir", hfDir)
+	hfData, closeHF, err := openHF(ctx, cfg, log)
+	defer closeHF()
+	if err != nil {
+		return err
 	}
 	var sunspots *sunspot.Source
 	if hfData != nil && cfg.sunspotURL != "" {

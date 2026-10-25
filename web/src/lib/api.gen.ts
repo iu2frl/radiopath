@@ -1893,7 +1893,7 @@ export interface components {
             /** @description The password in use, so a stolen session cannot create a lasting token */
             password: string;
             /** @description A write scope includes the read scope of the same resource */
-            scopes: ("sites:read" | "sites:write" | "antennas:read" | "antennas:write" | "links:read" | "links:write" | "coverages:read" | "coverages:write" | "account:read")[];
+            scopes: ("sites:read" | "sites:write" | "antennas:read" | "antennas:write" | "links:read" | "links:write" | "coverages:read" | "coverages:write" | "hf:read" | "account:read")[];
         };
         Overlay: {
             bounds: components["schemas"]["Bounds"];

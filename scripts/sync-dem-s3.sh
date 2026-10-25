@@ -25,13 +25,13 @@ shift $((OPTIND - 1))
 
 [ -r "$ENV_FILE" ] || { echo "env file not readable: $ENV_FILE" >&2; exit 2; }
 envval() { sed -n "s/^$1=//p" "$ENV_FILE" | tail -1; }
-ENDPOINT=$(envval RADIOPATH_DEM_S3_ENDPOINT)
-BUCKET=$(envval RADIOPATH_DEM_S3_BUCKET)
-PREFIX=$(envval RADIOPATH_DEM_S3_PREFIX)
-REGION=$(envval RADIOPATH_DEM_S3_REGION); REGION=${REGION:-us-east-1}
-ACCESS_KEY=$(envval RADIOPATH_DEM_S3_ACCESS_KEY)
-SECRET_KEY=$(envval RADIOPATH_DEM_S3_SECRET_KEY)
-[ -n "$ENDPOINT" ] && [ -n "$BUCKET" ] && [ -n "$ACCESS_KEY" ] || { echo "RADIOPATH_DEM_S3_ENDPOINT, _BUCKET, _ACCESS_KEY and _SECRET_KEY must be set in $ENV_FILE" >&2; exit 2; }
+ENDPOINT=$(envval RADIOPATH_DATASET_S3_ENDPOINT)
+BUCKET=$(envval RADIOPATH_DATASET_S3_BUCKET)
+PREFIX=$(envval RADIOPATH_DATASET_DEM); PREFIX=${PREFIX:-srtm1}/
+REGION=$(envval RADIOPATH_DATASET_S3_REGION); REGION=${REGION:-us-east-1}
+ACCESS_KEY=$(envval RADIOPATH_DATASET_S3_ACCESS_KEY)
+SECRET_KEY=$(envval RADIOPATH_DATASET_S3_SECRET_KEY)
+[ -n "$ENDPOINT" ] && [ -n "$BUCKET" ] && [ -n "$ACCESS_KEY" ] || { echo "RADIOPATH_DATASET_S3_ENDPOINT, _BUCKET, _ACCESS_KEY and _SECRET_KEY must be set in $ENV_FILE" >&2; exit 2; }
 
 s3curl() { curl -sS --aws-sigv4 "aws:amz:${REGION}:s3" --user "${ACCESS_KEY}:${SECRET_KEY}" "$@"; }
 

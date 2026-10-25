@@ -7,19 +7,18 @@ the Deployment, secrets via `secretKeyRef`.
 | Variable | Default | Description |
 |---|---|---|
 | `DATABASE_URL` | required | PostgreSQL URL, e.g. `postgres://user:pw@host:5432/radiopath` |
-| `RADIOPATH_DEM_DIR` | | Directory with `.hgt` tiles (read-only volume in Kubernetes). Required unless the S3 source is configured |
-| `RADIOPATH_DEM_S3_ENDPOINT` | | S3-compatible endpoint, e.g. `https://s3.example.org`. Enables the S3 source together with the bucket |
-| `RADIOPATH_DEM_S3_BUCKET` | | Bucket holding the `.hgt` tiles |
-| `RADIOPATH_DEM_S3_PREFIX` | empty | Key prefix, e.g. `srtm1/` for keys like `srtm1/N47E009.hgt` |
-| `RADIOPATH_DEM_S3_REGION` | `us-east-1` | SigV4 region; keep the default for MinIO and Ceph |
-| `RADIOPATH_DEM_S3_ACCESS_KEY` | | Access key. Empty: anonymous requests (public bucket) |
-| `RADIOPATH_DEM_S3_SECRET_KEY` | | Secret key, from a Kubernetes Secret |
+| `RADIOPATH_DATASET_DIR` | | Directory holding one folder per dataset, e.g. `/data` with `/data/srtm1/N47E009.hgt` (read-only volume in Kubernetes). Required unless the S3 bucket is configured |
+| `RADIOPATH_DATASET_S3_ENDPOINT` | | S3-compatible endpoint, e.g. `https://s3.example.org`. Required with the bucket |
+| `RADIOPATH_DATASET_S3_BUCKET` | | Bucket holding one key prefix per dataset. Takes precedence over the directory |
+| `RADIOPATH_DATASET_S3_REGION` | `us-east-1` | SigV4 region; keep the default for MinIO and Ceph |
+| `RADIOPATH_DATASET_S3_ACCESS_KEY` | | Access key. Empty: anonymous requests (public bucket) |
+| `RADIOPATH_DATASET_S3_SECRET_KEY` | | Secret key, from a Kubernetes Secret |
+| `RADIOPATH_DATASET_DEM` | `srtm1` | Folder or key prefix (without slash) of the `.hgt` terrain tiles |
+| `RADIOPATH_DATASET_CANOPY` | `canopy1` | Folder or key prefix (without slash) of the `.chm` canopy height tiles. Set it empty, or leave the folder out, for no vegetation model |
+| `RADIOPATH_DATASET_HF` | `hf1` | Folder or key prefix (without slash) of the ITU-R P.533/P.372 data of the HF model (`ionosNN.bin`, `COEFFNNW.txt`, `P1239-3 Decile Factors.txt`), created by `scripts/fetch-hf-data.sh`. Set it empty, or leave the folder out, for no HF model: the HF operations answer 503. A folder that is incomplete stops the server at startup. With the S3 bucket the files are downloaded into a temporary directory at startup (about 131 MB) and checked against their SHA-256; a file that does not match stops the server, files missing from the bucket turn the HF model off |
 | `RADIOPATH_DEM_CACHE_TILES` | `8` | Tiles kept in memory; a 1" tile is 26 MB (also the size of the canopy cache, 13 MB per tile) |
-| `RADIOPATH_CANOPY_DIR` | | Directory with `.chm` canopy height tiles. Empty: no vegetation model |
-| `RADIOPATH_CANOPY_S3_PREFIX` | | Key prefix of the `.chm` tiles in the DEM bucket, e.g. `canopy1/`. Takes precedence over the directory |
-| `RADIOPATH_DATASET_DIR` | | Directory with the data sets in versioned subfolders. `hf1/` holds the ITU-R P.533/P.372 data for the HF model (`ionosNN.bin`, `COEFFNNW.txt`, `P1239-3 Decile Factors.txt`), created by `scripts/fetch-hf-data.sh`. Empty: HF model not loaded and `POST /api/hf/predictions` answers 503. The server refuses to start if the directory is set but `hf1/` is missing or incomplete |
 | `RADIOPATH_LISTEN` | `:8080` | Listen address |
-| `RADIOPATH_SUNSPOT_URL` | `https://services.swpc.noaa.gov/json/solar-cycle` | Directory of the NOAA SWPC solar cycle files (`observed-solar-cycle-indices.json`, `predicted-solar-cycle.json`) the server downloads every 12 hours (15 minutes after a failure) to fill in the sunspot number of the HF page. Only used with `RADIOPATH_DATASET_DIR`. Empty: no download, `GET /api/hf/sunspots` answers 404 and the page keeps its default |
+| `RADIOPATH_SUNSPOT_URL` | `https://services.swpc.noaa.gov/json/solar-cycle` | Directory of the NOAA SWPC solar cycle files (`observed-solar-cycle-indices.json`, `predicted-solar-cycle.json`) the server downloads every 12 hours (15 minutes after a failure) to fill in the sunspot number of the HF page. Only used with the HF data set. Empty: no download, `GET /api/hf/sunspots` answers 404 and the page keeps its default |
 | `RADIOPATH_METRICS_LISTEN` | `:9090` | Listen address of the Prometheus endpoint (`/metrics`). A second listener on purpose, so it is never reachable through the ingress. Empty: no metrics |
 | `RADIOPATH_LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error`. Logs are always JSON lines on stderr |
 | `RADIOPATH_WORKERS` | `1` | Coverage workers in this process; `0` for web-only pods, `1` on compute pods |
@@ -37,5 +36,18 @@ the Deployment, secrets via `secretKeyRef`.
 | `RADIOPATH_TILE_URL` | `https://tile.openstreetmap.org/{z}/{x}/{y}.png` | Upstream tile template (`{z}`, `{x}`, `{y}`, optional `{s}`) |
 | `RADIOPATH_TILE_TTL` | `720h` | Cache lifetime of a tile, in Redis and in the browser |
 | `RADIOPATH_TILE_MISSES_PER_IP` | `300` | Tiles one client IP may fetch upstream per minute; `0` disables the limit |
+
+## Replaced variables
+
+Releases before the dataset root had separate variables for terrain and canopy. The server refuses to start while
+one of them is set and names its replacement:
+
+| Old | New |
+|---|---|
+| `RADIOPATH_DEM_DIR=/data/dem` | `RADIOPATH_DATASET_DIR=/data` and `RADIOPATH_DATASET_DEM=dem` (or rename the folder to `srtm1`) |
+| `RADIOPATH_DEM_S3_ENDPOINT`, `_BUCKET`, `_REGION`, `_ACCESS_KEY`, `_SECRET_KEY` | `RADIOPATH_DATASET_S3_*` with the same suffix |
+| `RADIOPATH_DEM_S3_PREFIX=srtm1/` | `RADIOPATH_DATASET_DEM=srtm1` |
+| `RADIOPATH_CANOPY_DIR`, `RADIOPATH_CANOPY_S3_PREFIX` | `RADIOPATH_DATASET_CANOPY`, a folder next to the terrain |
+| `RADIOPATH_HF_DIR` | `RADIOPATH_DATASET_HF`, a folder next to the terrain (default `hf1`) |
 
 Migrations are embedded and applied at startup.

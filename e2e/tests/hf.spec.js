@@ -1,6 +1,6 @@
 import { test, expect, c, login, toast, addSite } from '../helpers.js'
 
-test.beforeEach(({ page }) => login(page, 'hf'))
+test.beforeEach(({ page }) => login(page, 'hfpage'))
 
 // the e2e stack has no ITU data set, so the prediction itself is covered by the Go tests
 
@@ -100,7 +100,7 @@ test('draws the MUF and reliability charts', async ({ page }) => {
   // 14.2 MHz has no reliability at 12:00, so three points remain
   const rel = page.getByRole('img', { name: 'Circuit reliability (%)' })
   await expect(rel.locator('circle')).toHaveCount(3)
-  await expect(page.getByText('14.2 MHz').first()).toBeVisible()
+  await expect(rel.locator('..').locator('li', { hasText: '14.2 MHz' })).toBeVisible()
 
   await expect(c(page, 'tr', '06:00')).toContainText('2F2')
   await expect(page.getByText('Path length 2000 km')).toBeVisible()
@@ -167,24 +167,28 @@ test('shows why the map is missing', async ({ page }) => {
 })
 
 test('fills the sunspot number from the server until it is typed', async ({ page }) => {
+  // the value of a month is 100 plus the month; the page starts in the current month
+  const m0 = new Date().getMonth() + 1
+  const m1 = (m0 % 12) + 1
+  const m2 = (m1 % 12) + 1
   const asked = []
   await page.route('**/api/hf/sunspots*', (route) => {
     const q = new URL(route.request().url()).searchParams
     asked.push(`${q.get('year')}-${q.get('month')}`)
-    route.fulfill({ json: { ssn: q.get('month') === '10' ? 88 : 94, source: 'predicted', reference: 'NOAA SWPC' } })
+    route.fulfill({ json: { ssn: 100 + Number(q.get('month')), source: 'predicted', reference: 'NOAA SWPC' } })
   })
   await page.goto('/hf')
-  await expect(page.locator('[name=ssn]')).toHaveValue('94')
+  await expect(page.locator('[name=ssn]')).toHaveValue(String(100 + m0))
   await expect(page.getByTestId('ssn-source')).toContainText('predicted')
 
-  await page.locator('[name=month]').selectOption('10')
-  await expect(page.locator('[name=ssn]')).toHaveValue('88')
+  await page.locator('[name=month]').selectOption(String(m1))
+  await expect(page.locator('[name=ssn]')).toHaveValue(String(100 + m1))
 
   await page.locator('[name=ssn]').fill('120')
-  await page.locator('[name=month]').selectOption('11')
-  await expect(page.getByTestId('ssn-source')).toContainText('94')
+  await page.locator('[name=month]').selectOption(String(m2))
+  await expect(page.getByTestId('ssn-source')).toContainText(String(100 + m2))
   await expect(page.locator('[name=ssn]')).toHaveValue('120')
-  expect(asked).toContain(`${new Date().getFullYear()}-10`)
+  expect(asked).toContain(`${new Date().getFullYear()}-${m1}`)
 })
 
 test('keeps the default sunspot number when the server has no data', async ({ page }) => {
@@ -234,4 +238,19 @@ test('rejects a range that ends before it starts or has a bad hour window', asyn
   await expect(toast(page, 'End: before the start')).toBeVisible()
   await expect(toast(page, 'Hours: from and to must be whole hours from 0 to 23')).toBeVisible()
   await expect(toast(page, 'Step: must be a whole number of hours, 1 or more')).toBeVisible()
+})
+
+test('explains the cards with info buttons', async ({ page }) => {
+  await page.route('**/api/hf/predictions', (route) => route.fulfill({ json: { points: [point(6, 7.1), point(12, 7.1)] } }))
+  await page.goto('/hf')
+  await expect(c(page, 'button', 'Predict')).toBeEnabled()
+  await c(page, 'button', 'Predict').click()
+  await page.getByRole('button', { name: 'About the Circuit reliability chart' }).click()
+  await expect(page.getByRole('note')).toContainText('share of the days')
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('note')).toHaveCount(0)
+  await page.getByRole('button', { name: 'About the table' }).click()
+  await expect(page.getByRole('note')).toContainText('Propagation mode')
+  await page.getByRole('heading', { name: 'Prediction by hour and frequency' }).click()
+  await expect(page.getByRole('note')).toHaveCount(0)
 })

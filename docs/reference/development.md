@@ -14,6 +14,10 @@ on http://localhost:5173. Vite proxies everything the Go server answers (`/api`,
 reports, job events) to port 8080; the list is the regular expression in `web/vite.config.ts`. Ctrl-C stops
 everything, including the database containers.
 
+The HF model needs the ITU data set (131 MB, pinned and checked by SHA-256), which is not part of the testfiles:
+run `scripts/fetch-hf-data.sh` once, after the clone, and it fills `tmp/testfiles/hf1` (the dataset root from
+`.env`); without it the HF page answers that the model is not configured.
+
 ## Make targets
 
 | Command | What it does |

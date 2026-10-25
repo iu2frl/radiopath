@@ -21,7 +21,7 @@ func testDirs(t *testing.T) (dataDir, refDir string) {
 	refDir = "testdata"
 	dataDir = os.Getenv("HF_P533_DATA")
 	if dataDir == "" {
-		dataDir = filepath.Join("..", "..", "tmp", "dataset", "hf1")
+		dataDir = filepath.Join("..", "..", "tmp", "testfiles", "hf1")
 	}
 	if _, err := os.Stat(filepath.Join(dataDir, "ionos01.bin")); err != nil {
 		if os.Getenv("HF_REQUIRE_DATA") != "" {

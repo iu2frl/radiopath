@@ -88,8 +88,7 @@ services:
         condition: service_started
     environment:
       DATABASE_URL: postgres://radiopath:radiopath@e2e-db:5432/radiopath
-      RADIOPATH_DEM_DIR: /data/dem
-      RADIOPATH_CANOPY_DIR: /data/canopy
+      RADIOPATH_DATASET_DIR: /data
       RADIOPATH_METRICS_LISTEN: ""
       RADIOPATH_WORKERS: "1"
       RADIOPATH_LOG_LEVEL: warn

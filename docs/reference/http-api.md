@@ -25,6 +25,7 @@ in the app ([how-to](../how-to/use-the-api-with-a-token.md)), as `Authorization:
   | `antennas:read`, `antennas:write` | `/api/antennas` |
   | `links:read`, `links:write` | `/api/links`, `links:read` also `/links/{id}/report.pdf` |
   | `coverages:read`, `coverages:write` | `/api/coverages`, `coverages:read` also the rasters, report and events |
+  | `hf:read` | `POST /api/hf/predictions`, `POST /api/hf/maps`, `GET /api/hf/sunspots`; there is no write scope, nothing is stored |
   | `account:read` | `GET /api/me` |
 
   A write scope is stored together with the read scope of the same resource. Account settings
@@ -57,8 +58,8 @@ Without a session or token these routes answer 401 (403 for a token without the 
 
 `POST /api/hf/predictions` (scope `hf:read`, session) predicts an HF circuit between two of the user's sites with
 ITU-R P.533-14 and P.372 (`internal/hf`) and stores nothing. It counts towards the 60 calculations per minute of a
-user (429 beyond that). The web app offers it on the page `/hf`. It answers 503 until `RADIOPATH_DATASET_DIR` points at a
-directory with the ITU data set in `hf1/`, and 404 for a site of another user. The body names the sites and the conditions:
+user (429 beyond that). The web app offers it on the page `/hf`. It answers 503 until the HF data set is loaded (the
+`hf1/` folder of the dataset root, see `RADIOPATH_DATASET_HF`), and 404 for a site of another user. The body names the sites and the conditions:
 
 ```json
 {

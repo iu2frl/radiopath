@@ -41,8 +41,8 @@ jobs:
       # ITU data set for the HF model tests (pinned and checksummed); without it they would skip, so require it.
       - uses: actions/cache@v6
         with:
-          path: tmp/dataset/hf1
-          key: hf-data-${{ hashFiles('scripts/fetch-hf-data.sh') }}
+          path: tmp/testfiles/hf1
+          key: hf-data-${{ hashFiles('scripts/fetch-hf-data.sh', 'internal/hf/data.sha256') }}
       - run: scripts/fetch-hf-data.sh
       - run: go test -race ./...
         env:
@@ -65,10 +65,10 @@ jobs:
             ITURHFProp/Src
       - uses: actions/cache@v6
         with:
-          path: tmp/dataset/hf1
-          key: hf-data-${{ hashFiles('scripts/fetch-hf-data.sh') }}
+          path: tmp/testfiles/hf1
+          key: hf-data-${{ hashFiles('scripts/fetch-hf-data.sh', 'internal/hf/data.sha256') }}
       - run: scripts/fetch-hf-data.sh
-      - run: internal/hf/testdata/check-reference.sh tmp/itu tmp/dataset/hf1
+      - run: internal/hf/testdata/check-reference.sh tmp/itu tmp/testfiles/hf1
 
   # Known vulnerabilities in code paths we call; not a need of docker-image, so a new report does not block releases.
   govulncheck:

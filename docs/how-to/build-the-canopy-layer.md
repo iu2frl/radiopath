@@ -1,8 +1,8 @@
 # Build the tree canopy layer
 
 How to produce and serve the canopy height tiles that add vegetation loss to links. Why and how the layer enters
-the calculation is explained in [The propagation model](../explanation/propagation-model.md#tree-canopy). Point
-`RADIOPATH_CANOPY_DIR` or `RADIOPATH_CANOPY_S3_PREFIX` at the result (see
+the calculation is explained in [The propagation model](../explanation/propagation-model.md#tree-canopy). The server
+finds the result in the folder or key prefix `RADIOPATH_DATASET_CANOPY` (default `canopy1`) next to the terrain (see
 [Configuration](../reference/configuration.md)).
 
 Tiles are `.chm` files on the SRTM 1" grid: 3601 x 3601 nodes, one byte per

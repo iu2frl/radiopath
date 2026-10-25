@@ -42,7 +42,7 @@ type base struct {
 type Server struct {
 	Store        *store.Store
 	Analyzer     link.Analyzer
-	HF           *hf.Data // nil without RADIOPATH_DATASET_DIR; the HF operation answers 503
+	HF           *hf.Data        // nil without the HF data set (RADIOPATH_DATASET_HF); the HF operations answer 503
 	Sunspots     *sunspot.Source // nil without HF data or with RADIOPATH_SUNSPOT_URL empty; the lookup answers 404
 	Tiles        *tiles.Proxy
 	DEMReady     func() error
