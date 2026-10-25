@@ -11,7 +11,7 @@ implementation of the Recommendation as well as in revisions of the specific
 original Recommendation and in other ITU Recommendations, free from any
 copyright assertions.
 
-Modifications (2026-10, Fabian Berg, HB9HIL):
+Modifications (2026-10, Luca IU2FRL):
   - Translated from C to Go, one Go file per original source file
     (P533.h is p533.go, Common.h is common.go, P533.c is p533_run.go,
     MedianAvailableReceiverPower.c is median_available_receiver_power.go, ...).
