@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -20,7 +21,8 @@ func init() {
 	huma.DefaultArrayNullable = false
 }
 
-// Scopes name what an operation needs; for now any session grants all of them. scopeSession marks operations no API token may call.
+// Scopes name what an operation needs: a session grants all of them, an API token only those it was created with.
+// scopeSession marks operations no API token may call.
 const (
 	scopeAccountRead = "account:read"
 	scopeSession     = "session"
@@ -40,6 +42,30 @@ func (s *Server) OpenAPI() ([]byte, error) {
 	return api.OpenAPI().MarshalJSON()
 }
 
+const apiIntro = `Radio link and coverage planning: sites, antennas, point-to-point links with their path analysis and
+area coverages. The web app is built on this API; other programs use it with a personal API token.
+
+## Authentication
+
+Create a token under **API tokens** in the web app and send it with every request:
+
+    Authorization: Bearer rp_...
+
+A token reaches the operations whose scope it was given (shown at each operation, for example ` + "`sites:read`" + `);
+a write scope includes the read scope of the same resource. Account settings and token management need a login in
+the web app. A token without the scope gets 403, a wrong, expired or revoked one 401.
+
+## Errors
+
+Errors are problem details (RFC 9457) with ` + "`status`" + ` and ` + "`detail`" + `; rejected input lists each field in
+` + "`errors[]`" + ` with its ` + "`location`" + `, such as ` + "`body.lat`" + `.
+
+## Limits
+
+300 requests per token and minute, 60 path analyses, PDF reports and raster merges per user and minute; above that the
+answer is 429. Rasters, PDF reports and job events live outside ` + "`/api`" + ` (` + "`/links/{id}/report.pdf`" + `,
+` + "`/coverages/{id}/image.png`" + ` and so on) and take the same token.`
+
 // apiConfig returns the huma configuration with the API paths and the session scheme.
 func (s *Server) apiConfig() huma.Config {
 	// no version: it would tell an attacker which known bugs apply
@@ -49,8 +75,18 @@ func (s *Server) apiConfig() huma.Config {
 	c.DocsPath = ""
 	c.SchemasPath = "/api/schemas"
 	c.CreateHooks = nil
+	c.Info.Description = apiIntro
+	c.OpenAPI.OnAddOperation = append(c.OpenAPI.OnAddOperation, describeAccess)
+	c.Tags = []*huma.Tag{
+		{Name: "Sites"}, {Name: "Antennas"}, {Name: "Links"}, {Name: "Coverages"},
+		{Name: "Shared pages", Description: "Read-only views of shared links and coverages; anyone with the share token may call them."},
+		{Name: "Account", Description: "Login, registration and the account itself; changes need a session, not a token."},
+		{Name: "API tokens", Description: "Managing personal API tokens needs a session; a token cannot create or list tokens."},
+	}
 	c.Components.SecuritySchemes = map[string]*huma.SecurityScheme{
 		"session": {Type: "apiKey", In: "cookie", Name: sessionCookie, Description: "The session cookie set by POST /api/session."},
+		"bearer": {Type: "http", Scheme: "bearer", Description: "A personal API token (`rp_...`), created under API tokens in the web app. " +
+			"It may call the operations whose scope it was given; account settings and token management need a session."},
 	}
 	return c
 }
@@ -67,23 +103,78 @@ func (s *Server) registerAPI(api huma.API) {
 	s.registerCoverages(api)
 	s.registerHF(api)
 	s.registerAccount(api)
+	s.registerTokens(api)
 }
 
-// op returns an operation; a non-empty scope requires a logged-in user, an empty one makes it public.
+// op returns an operation; a non-empty scope requires a logged-in user or, unless it is scopeSession, an API token
+// with that scope; an empty one makes it public.
 func op(id, method, path, scope, summary string) huma.Operation {
-	o := huma.Operation{OperationID: id, Method: method, Path: path, Summary: summary}
+	o := huma.Operation{OperationID: id, Method: method, Path: path, Summary: summary, Tags: []string{tagOf(path)}}
 	if scope != "" {
 		o.Security = []map[string][]string{{"session": {}}}
-		o.Errors = []int{http.StatusUnauthorized}
+		if scope != scopeSession {
+			// bearer first: it is what other programs use, so the reference shows it in the examples
+			o.Security = []map[string][]string{{"bearer": {scope}}, {"session": {}}}
+		}
+		o.Errors = []int{http.StatusUnauthorized, http.StatusForbidden}
 	}
 	return o
 }
 
-// gate answers 401 for operations with security when nobody is logged in.
+// tagOf groups an operation in the API reference by the resource of its path.
+func tagOf(path string) string {
+	for _, t := range []struct{ prefix, tag string }{
+		{"/api/sites", "Sites"}, {"/api/antennas", "Antennas"}, {"/api/links", "Links"}, {"/api/coverages", "Coverages"},
+		{"/api/share/", "Shared pages"}, {"/api/me/tokens", "API tokens"},
+	} {
+		if strings.HasPrefix(path, t.prefix) {
+			return t.tag
+		}
+	}
+	return "Account"
+}
+
+// describeAccess appends to an operation's description who may call it, so the API reference shows the scope.
+func describeAccess(_ *huma.OpenAPI, o *huma.Operation) {
+	var who string
+	switch sc := tokenScope(o); {
+	case sc != "":
+		who = "API token scope: `" + sc + "`."
+	case len(o.Security) > 0:
+		who = "Needs a session; API tokens cannot call it."
+	default:
+		return
+	}
+	if o.Description != "" {
+		who = o.Description + "\n\n" + who
+	}
+	o.Description = who
+}
+
+// tokenScope returns the scope an API token needs for o, or "" when no token may call it.
+func tokenScope(o *huma.Operation) string {
+	for _, req := range o.Security {
+		if s := req["bearer"]; len(s) > 0 {
+			return s[0]
+		}
+	}
+	return ""
+}
+
+// gate answers 401 for operations with security when nobody is logged in, and 403 when an API token may not call them.
 func (s *Server) gate(api huma.API) func(huma.Context, func(huma.Context)) {
 	return func(ctx huma.Context, next func(huma.Context)) {
-		if len(ctx.Operation().Security) > 0 && userOf(ctx.Context()).ID == 0 {
+		o := ctx.Operation()
+		if len(o.Security) == 0 {
+			next(ctx)
+			return
+		}
+		if userOf(ctx.Context()).ID == 0 {
 			huma.WriteErr(api, ctx, http.StatusUnauthorized, "Not logged in")
+			return
+		}
+		if msg := tokenDenied(ctx.Context(), tokenScope(o)); msg != "" {
+			huma.WriteErr(api, ctx, http.StatusForbidden, msg)
 			return
 		}
 		next(ctx)
@@ -114,18 +205,29 @@ func privateSpec(next http.Handler) http.Handler {
 	})
 }
 
-// authenticate puts the request info and the session user, if any, into the context; it never rejects, gate does.
+// authenticate puts the request info and the caller, if any, into the context. Without credentials it never
+// rejects, gate does; a bad API token is answered here, as problem JSON.
 func (s *Server) authenticate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		info := requestInfo{ip: s.clientIP(r), secure: secureCookie(r)}
-		if c, err := r.Cookie(sessionCookie); err == nil {
+		if c, err := r.Cookie(sessionCookie); err == nil && r.Header.Get("Authorization") == "" {
 			info.cookie = c.Value
 		}
 		ctx := context.WithValue(r.Context(), reqKey, info)
-		u, err := s.sessionUser(r)
+		u, tok, err := s.identify(r)
+		var ae *authError
 		switch {
 		case err == nil:
 			ctx = context.WithValue(ctx, userKey, u)
+			if tok != nil {
+				ctx = context.WithValue(ctx, tokenKey, tok)
+			}
+		case errors.As(err, &ae):
+			ae.header(w)
+			w.Header().Set("Content-Type", "application/problem+json")
+			w.WriteHeader(ae.status)
+			json.NewEncoder(w).Encode(huma.ErrorModel{Title: http.StatusText(ae.status), Status: ae.status, Detail: ae.msg})
+			return
 		case !errors.Is(err, store.ErrNotFound):
 			s.Log.Error("session lookup", "err", err)
 			http.Error(w, "internal error", http.StatusInternalServerError)

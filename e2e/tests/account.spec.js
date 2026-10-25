@@ -1,10 +1,10 @@
-import { test, expect, login, mailLink, password, pathname, status, toast } from '../helpers.js'
+import { test, expect, confirmDialog, login, mailLink, password, pathname, status, toast } from '../helpers.js'
 
 const user = 'account'
 const newPassword = 'e2e-password-2'
 
 const changePassword = async (page, current, next) => {
-  await page.goto('/account')
+  await page.goto('/account/security')
   await page.locator('[name=current]').fill(current)
   await page.locator('[name=password]').fill(next)
   await page.locator('[name=password2]').fill(next)
@@ -31,7 +31,7 @@ test('rejects a wrong current password', async ({ page }) => {
 
 const changeEmail = async (page, email, pw) => {
   await page.goto('/account')
-  await expect(page.locator('[name=email]')).not.toHaveValue('')
+  await page.getByRole('button', { name: 'Change', exact: true }).click()
   await page.locator('[name=email]').fill(email)
   await page.locator('[name=email_password]').fill(pw)
   await page.locator('[name=email_password]').press('Enter')
@@ -41,6 +41,7 @@ test('adds an address by confirmation link', async ({ page }) => {
   await login(page, user, newPassword)
   await page.goto('/account')
   await expect(page.getByText('No address on file').first()).toBeVisible()
+  await page.getByRole('button', { name: 'Add address' }).click()
   await page.locator('[name=email]').fill('account@example.test')
   await page.locator('[name=email_password]').fill(newPassword)
   await page.locator('[name=email_password]').press('Enter')
@@ -48,7 +49,8 @@ test('adds an address by confirmation link', async ({ page }) => {
   await page.goto(await mailLink(page, 'account@example.test', 'Confirm'))
   await expect.poll(() => pathname(page)).toBe('/account')
   await expect(toast(page, 'Address confirmed.')).toBeVisible()
-  await expect(page.locator('[name=email]')).toHaveValue('account@example.test')
+  await expect(page.locator('#email')).toHaveText('account@example.test')
+  await expect(page.getByText('Confirmed', { exact: true })).toBeVisible()
 })
 
 test('changes the address only with the password and tells the old one', async ({ page }) => {
@@ -60,4 +62,29 @@ test('changes the address only with the password and tells the old one', async (
   await page.goto(await mailLink(page, 'account2@example.test', 'Confirm'))
   await expect(toast(page, 'Address confirmed.')).toBeVisible()
   expect(await mailLink(page, 'account@example.test', 'address was changed')).toMatch(/\/forgot$/)
+})
+
+test('logs out the other devices and stays logged in', async ({ page, browser }) => {
+  const other = await browser.newContext()
+  await login(other, user, newPassword)
+  await login(page, user, newPassword)
+  await page.goto('/account/security')
+  await page.getByRole('button', { name: 'Log out other devices' }).click()
+  await confirmDialog(page, 'Log out')
+  // the other context and the logins of the earlier tests
+  await expect(toast(page, 'logged out')).toContainText(/\d+ other sessions? logged out/)
+  expect(await status(other, '/api/me')).toBe(401)
+  expect(await status(page, '/api/me')).toBe(200)
+  await other.close()
+})
+
+test('switches between the account tabs', async ({ page }) => {
+  await login(page, user, newPassword)
+  await page.goto('/account')
+  const tabs = page.getByRole('navigation', { name: 'Account' })
+  for (const [name, path] of [['Security', '/account/security'], ['API tokens', '/account/tokens'], ['Profile', '/account']]) {
+    await tabs.getByRole('link', { name }).click()
+    await expect.poll(() => pathname(page)).toBe(path)
+    await expect(tabs.getByRole('link', { name })).toHaveAttribute('aria-current', 'page')
+  }
 })

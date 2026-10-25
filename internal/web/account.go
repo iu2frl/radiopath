@@ -101,8 +101,12 @@ func (s *Server) sendLink(ctx context.Context, u store.User, email, purpose stri
 }
 
 // mailLater sends in the background, so the response time of the public mail flows does not tell whether an address
-// or name exists; failures are logged.
+// or name exists; failures are logged. Without a mailer it only logs: a panic in the goroutine would end the process.
 func (s *Server) mailLater(to, subject, text string) {
+	if s.Mail == nil {
+		s.Log.Warn("mail not configured, not sent", "subject", subject)
+		return
+	}
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), mailTimeout)
 		defer cancel()
@@ -143,13 +147,16 @@ type EmailOutput struct {
 	Status int
 }
 
-// registerAccount registers the changes of the logged-in user's address and password; both need a session, not a token.
+// registerAccount registers the changes of the logged-in user's address, password and sessions; all need a session, not a token.
 func (s *Server) registerAccount(api huma.API) {
 	o := op("set-my-email", http.MethodPut, "/api/me/email", scopeSession, "Change the address of the account")
 	o.DefaultStatus = http.StatusAccepted
-	o.Errors = append(o.Errors, http.StatusTooManyRequests)
-	o.Description = "202: a confirmation link went to the new address, which takes effect once it is opened; the old address gets a notice then. 204: the address is the same."
+	o.Errors = append(o.Errors, http.StatusNotFound, http.StatusTooManyRequests)
+	o.Description = "202: a confirmation link went to the new address, which takes effect once it is opened; the old address gets a notice then. 204: the address is the same. 404: mail is not configured on this server."
 	huma.Register(api, o, func(ctx context.Context, in *EmailChangeInput) (*EmailOutput, error) {
+		if s.Mail == nil {
+			return nil, huma.Error404NotFound("Mail is not configured on this server, so the address cannot be confirmed.")
+		}
 		u := userOf(ctx)
 		if err := s.checkPassword(ctx, u, in.Body.Password, "body.password"); err != nil {
 			return nil, err
@@ -198,6 +205,25 @@ func (s *Server) registerAccount(api huma.API) {
 		s.Log.Info("password changed", "user", u.Name)
 		return &SessionOutput{SetCookie: c}, nil
 	})
+
+	huma.Register(api, op("delete-my-other-sessions", http.MethodDelete, "/api/me/sessions", scopeSession, "Log out every other session of the account"),
+		func(ctx context.Context, _ *struct{}) (*SessionsOutput, error) {
+			u := userOf(ctx)
+			n, err := s.Store.DeleteOtherSessions(ctx, u.ID, sessionID(reqInfo(ctx).cookie))
+			if err != nil {
+				return nil, s.storeErr(err)
+			}
+			s.Log.Info("other sessions revoked", "user", u.Name, "count", n)
+			out := &SessionsOutput{}
+			out.Body.Count = n
+			return out, nil
+		})
+}
+
+type SessionsOutput struct {
+	Body struct {
+		Count int64 `json:"count" doc:"How many sessions were logged out"`
+	}
 }
 
 // checkPassword returns a 422 at field unless password is the one of u.

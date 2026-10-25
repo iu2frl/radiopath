@@ -1,5 +1,4 @@
 <script lang="ts">
-	import BookOpen from '@lucide/svelte/icons/book-open';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import CircleUserRound from '@lucide/svelte/icons/circle-user-round';
 	import LogOut from '@lucide/svelte/icons/log-out';
@@ -59,9 +58,6 @@
 					<DropdownMenu.Item onSelect={() => theme.toggle()}>
 						{#if theme.dark}<Sun />Light theme{:else}<Moon />Dark theme{/if}
 					</DropdownMenu.Item>
-					<DropdownMenu.Item onSelect={() => window.open('/api/openapi.json', '_blank', 'noopener')}
-						><BookOpen />OpenAPI description</DropdownMenu.Item
-					>
 					<DropdownMenu.Separator />
 					<DropdownMenu.Item onSelect={logout}><LogOut />Log out</DropdownMenu.Item>
 				</DropdownMenu.Content>

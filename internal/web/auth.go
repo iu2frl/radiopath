@@ -109,19 +109,33 @@ func (s *Server) sessionUser(r *http.Request) (store.User, error) {
 	return s.Store.SessionUser(r.Context(), sessionID(c.Value), sessionIdle, sessionTTL)
 }
 
-// requireUser puts the session user into the context, or answers 401; store errors give a 500.
-func (s *Server) requireUser(next http.Handler) http.Handler {
+// requireUser puts the caller into the context, or answers 401; an API token also needs scope (403 without).
+// Store errors give a 500.
+func (s *Server) requireUser(scope string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		u, err := s.sessionUser(r)
-		if errors.Is(err, store.ErrNotFound) {
+		u, tok, err := s.identify(r)
+		var ae *authError
+		switch {
+		case errors.Is(err, store.ErrNotFound):
 			http.Error(w, "not logged in", http.StatusUnauthorized)
 			return
-		}
-		if err != nil {
+		case errors.As(err, &ae):
+			ae.header(w)
+			http.Error(w, ae.msg, ae.status)
+			return
+		case err != nil:
 			s.fail(w, err)
 			return
 		}
-		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), userKey, u)))
+		ctx := context.WithValue(r.Context(), userKey, u)
+		if tok != nil {
+			ctx = context.WithValue(ctx, tokenKey, tok)
+		}
+		if msg := tokenDenied(ctx, scope); msg != "" {
+			http.Error(w, msg, http.StatusForbidden)
+			return
+		}
+		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 

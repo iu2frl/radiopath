@@ -15,6 +15,7 @@ framework: every page is one of four kinds, and each kind answers a different ne
 
 ## How-to guides
 
+- [Use the API with a token](how-to/use-the-api-with-a-token.md)
 - [Add an API operation](how-to/add-an-api-operation.md)
 - [Run and write end-to-end tests](how-to/run-and-write-e2e-tests.md)
 - [Load terrain from S3](how-to/load-terrain-from-s3.md)
