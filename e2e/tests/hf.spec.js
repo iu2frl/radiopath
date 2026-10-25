@@ -177,11 +177,11 @@ test('fills the sunspot number from the server until it is typed', async ({ page
   await expect(page.locator('[name=ssn]')).toHaveValue('94')
   await expect(page.getByTestId('ssn-source')).toContainText('predicted')
 
-  await page.locator('[name=month]').fill('10')
+  await page.locator('[name=month]').selectOption('10')
   await expect(page.locator('[name=ssn]')).toHaveValue('88')
 
   await page.locator('[name=ssn]').fill('120')
-  await page.locator('[name=month]').fill('11')
+  await page.locator('[name=month]').selectOption('11')
   await expect(page.getByTestId('ssn-source')).toContainText('94')
   await expect(page.locator('[name=ssn]')).toHaveValue('120')
   expect(asked).toContain(`${new Date().getFullYear()}-10`)
@@ -216,7 +216,10 @@ test('predicts every month of a range with the hours from, to and step', async (
   expect(sent.map((b) => [b.year, b.month])).toEqual([[2026, 3], [2026, 4], [2026, 5]])
   expect(sent[0].hours_utc).toEqual([6, 12, 24])
   await expect(page.locator('[name=period]')).toHaveValue('2026-3')
-  await expect(c(page, 'th', 'Month')).toBeVisible()
+  await expect(page.locator('[name=period] option')).toHaveText(['March 2026', 'April 2026', 'May 2026'])
+  await expect(page.locator('tbody tr')).toHaveCount(3)
+  await page.locator('[name=period]').selectOption({ label: 'May 2026' })
+  await expect(page.locator('tbody tr')).toHaveCount(3)
 })
 
 test('rejects a range that ends before it starts or has a bad hour window', async ({ page }) => {

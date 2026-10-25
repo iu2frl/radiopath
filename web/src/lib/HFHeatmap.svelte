@@ -46,7 +46,13 @@
 			{ padding: [10, 10] }
 		);
 		cells = rects;
-		return () => m.remove();
+		// The page grows when the charts arrive and may get a scrollbar, which narrows the map after Leaflet measured it.
+		const resize = new ResizeObserver(() => m.invalidateSize());
+		resize.observe(el);
+		return () => {
+			resize.disconnect();
+			m.remove();
+		};
 	});
 
 	// Another hour only recolours the cells; a cell the model could not calculate stays clear.

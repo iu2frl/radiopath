@@ -14,12 +14,14 @@
 	import LineChart, { type Pt } from '$lib/LineChart.svelte';
 	import { invalid, notifyError } from '$lib/notify';
 	import PageHead from '$lib/PageHead.svelte';
+	import InfoButton from '$lib/InfoButton.svelte';
 
 	const now = new Date();
 	// The model knows a month and the hours of a day, so a range is one prediction per month.
 	type Period = { year: number; month: number; hours: number[] };
 	type Run = { key: string; label: string; body: HFPredictionInput; points: HFPoint[] };
 	const maxMonths = 12;
+	const monthNames = Array.from({ length: 12 }, (_, i) => new Date(Date.UTC(2000, i)).toLocaleString('en', { month: 'long', timeZone: 'UTC' }));
 	const qc = useQueryClient();
 	const sites = createQuery(() => ({ queryKey: ['sites'], queryFn: () => call(api.GET('/api/sites')) }));
 	const antennas = createQuery(() => ({ queryKey: ['antennas'], queryFn: () => call(api.GET('/api/antennas')) }));
@@ -138,6 +140,11 @@
 	/** Asks the server for the smoothed sunspot number of a month. */
 	function sunspotQuery(year: number, month: number) {
 		return call(api.GET('/api/hf/sunspots', { params: { query: { year, month } } }));
+	}
+
+	/** "October 2026" for a year and a month from 1 to 12. */
+	function monthLabel(year: number, month: number): string {
+		return `${monthNames[month - 1]} ${year}`;
 	}
 
 	/** Reads "2026-10" as a month count to step through; NaN for anything else. */
@@ -363,7 +370,7 @@
 			const done: Run[] = [];
 			for (const r of bs) {
 				const points = (await call(api.POST('/api/hf/predictions', { body: r }))).points;
-				done.push({ key: `${r.year}-${r.month}`, label: `${r.year}-${String(r.month).padStart(2, '0')}`, body: r, points });
+				done.push({ key: `${r.year}-${r.month}`, label: monthLabel(r.year, r.month), body: r, points });
 			}
 			runKey = done[0].key;
 			runs = done;
@@ -393,11 +400,20 @@
 		return r == null ? '–' : r.toFixed(0);
 	}
 
+	// The texts of the info buttons.
+	const infoText = {
+		muf: 'The MUF (maximum usable frequency) is the highest frequency the ionosphere still bends back to earth on this path at that hour. The solid line is the median, exceeded on half of the days of the month; the band runs from the value exceeded on 90% of the days to the one exceeded on 10%. The dashed lines are your frequencies: below the MUF the signal is usually reflected, above it most of it escapes into space.',
+		reliability:
+			'The share of the days of the month on which the circuit works at that hour: the signal to noise ratio reaches the one your mode needs. Analog modes and paths beyond 9000 km use the basic reliability (signal and noise only); digital modes up to 9000 km use the overall reliability, which also counts multipath and the signal to interference ratio. It is a statistic of the month, not a forecast for one day.',
+		map: 'The reliability of the circuit from site A (TX) to the centre of each 10° cell, for the frequency and the hour chosen: green works on most days, red almost never. Site B (RX) is marked for reference. Use the slider to step through the hours of the month shown.',
+		table:
+			'Propagation mode is the dominant way the signal gets there, for example 2F2: two hops off the F2 layer (none is shown beyond 7000 km). MUF is the median MUF, field is the median field strength at the receiver, SNR the median signal to noise ratio in the bandwidth of your mode. Reliability is the share of days on which the SNR reaches the required one. A dash means the quantity does not apply to the path.'
+	};
+
 	// One colour per frequency, shared by both charts.
 	const palette = ['var(--cp-accent)', 'var(--cp-ok)', 'var(--cp-warn)', 'var(--cp-ray)', 'var(--cp-fresnel)', 'var(--cp-canopy)'];
 	const run = $derived(runs?.find((r) => r.key === runKey) ?? runs?.[0]);
 	const shown = $derived(run?.points ?? []);
-	const rows = $derived(runs?.flatMap((r) => r.points.map((p) => ({ ...p, key: r.key, label: r.label }))) ?? []);
 	const hours = $derived([...new Set(shown.map((p) => p.hour_utc))].sort((a, b) => a - b));
 	const freqs = $derived([...new Set(shown.map((p) => p.frequency_mhz))].sort((a, b) => a - b));
 
@@ -445,7 +461,7 @@
 			<Field wide label="Path">
 				<span class="flex items-center gap-2">
 					<input type="checkbox" name="long_path" bind:checked={v.long_path} />
-					<span class="text-xs text-muted-foreground">the long way round the globe</span>
+					<span class="text-xs text-muted-foreground">long path (the long way round the globe)</span>
 				</span>
 			</Field>
 		</fieldset>
@@ -459,7 +475,11 @@
 			</Field>
 			{#if v.date_mode === 'month'}
 				<Field wide label="Year"><Input class="max-w-68 font-mono" name="year" inputmode="numeric" bind:value={v.year} /></Field>
-				<Field wide label="Month (1 to 12)"><Input class="max-w-68 font-mono" name="month" inputmode="numeric" bind:value={v.month} /></Field>
+				<Field wide label="Month">
+					<NativeSelect class="w-68" name="month" bind:value={v.month}>
+						{#each monthNames as m, i (m)}<option value={String(i + 1)}>{m}</option>{/each}
+					</NativeSelect>
+				</Field>
 				<Field wide label="Hours (UTC, 1 to 24)">
 					<Input class="max-w-68 font-mono" name="hours_utc" placeholder="6, 12, 18" bind:value={v.hours_utc} />
 				</Field>
@@ -486,14 +506,14 @@
 			{/if}
 			<Field wide label="Sunspot number (R12)">
 				<Input class="max-w-68 font-mono" name="ssn" inputmode="numeric" bind:value={v.ssn} oninput={() => (ssnEdited = true)} />
-				{#if sunspot.data}
-					<p class="mt-1 text-xs text-muted-foreground" data-testid="ssn-source">
-						{sunspot.data.ssn}, {sunspot.data.source} smoothed value of {sunspot.data.reference} for {v.date_mode === 'range'
-							? 'the first month, the others get their own'
-							: 'this month'}
-					</p>
-				{/if}
 			</Field>
+			{#if sunspot.data}
+				<p class="text-xs text-muted-foreground" data-testid="ssn-source">
+					{sunspot.data.ssn}, {sunspot.data.source} smoothed value of {sunspot.data.reference} for {v.date_mode === 'range'
+						? 'the first month, the others get their own'
+						: 'this month'}
+				</p>
+			{/if}
 		</fieldset>
 		<fieldset class="grid gap-3">
 			<legend class="mb-2 w-full border-b pb-1 text-xs font-medium text-muted-foreground">Stations</legend>
@@ -583,9 +603,19 @@
 	</form>
 
 	<FormErrors {error} />
+	{#if runs && runs.length > 1}
+		<label class="flex items-center gap-3 text-sm">
+			<span class="text-muted-foreground">Month shown</span>
+			<NativeSelect class="w-48" name="period" value={run?.key} onchange={(e) => pickRun(e.currentTarget.value)}>
+				{#each runs as r (r.key)}<option value={r.key}>{r.label}</option>{/each}
+			</NativeSelect>
+			<span class="text-xs text-muted-foreground">for the map, the charts and the table</span>
+		</label>
+	{/if}
 	{#if heatSites && (heatmap || heatBusy || heatError)}
-		<section class="grid gap-3 rounded-lg border bg-card p-3" aria-label="Reliability map">
-			<div class="flex flex-wrap items-center justify-between gap-2">
+		<section class="relative grid gap-3 rounded-lg border bg-card p-3" aria-label="Reliability map">
+			<InfoButton label="About the reliability map" text={infoText.map} />
+			<div class="flex flex-wrap items-center justify-between gap-2 pr-6">
 				<h2 class="text-sm font-medium">Reliability from {heatSites.tx.name} at {heatFreq || heatBody?.frequencies_mhz[0]} MHz</h2>
 				{#if freqs.length > 1}
 					<NativeSelect
@@ -638,18 +668,7 @@
 			{/if}
 		</section>
 	{/if}
-	{#if rows.length}
-		{#if runs && runs.length > 1}
-			<NativeSelect
-				class="w-40"
-				name="period"
-				aria-label="Month of the charts and the map"
-				value={run?.key}
-				onchange={(e) => pickRun(e.currentTarget.value)}
-			>
-				{#each runs as r (r.key)}<option value={r.key}>{r.label}</option>{/each}
-			</NativeSelect>
-		{/if}
+	{#if shown.length}
 		<div class="grid gap-4 md:grid-cols-2">
 			<LineChart
 				title="MUF"
@@ -657,19 +676,22 @@
 				band={{ label: 'MUF exceeded on 90% to 10% of the days', color: 'var(--cp-fg)', lo: mufOver('muf_90_mhz'), hi: mufOver('muf_10_mhz') }}
 				series={[{ label: 'MUF, median', color: 'var(--cp-fg)', points: mufOver('muf_50_mhz') }]}
 				refs={freqs.map((f, i) => ({ label: `${f} MHz`, color: palette[i % palette.length], y: f }))}
+				info={infoText.muf}
 			/>
 			<LineChart
 				title="Circuit reliability"
 				unit="%"
 				yMax={100}
+				info={infoText.reliability}
 				series={freqs.map((f, i) => ({ label: `${f} MHz`, color: palette[i % palette.length], points: reliabilityOver(f) }))}
 			/>
 		</div>
-		<div class="rounded-lg border bg-card">
+		<div class="relative rounded-lg border bg-card">
+			<InfoButton label="About the table" text={infoText.table} />
+			<h2 class="border-b px-3 py-2 pr-8 text-sm font-medium">Prediction by hour and frequency{runs && runs.length > 1 ? `, ${run?.label}` : ''}</h2>
 			<Table.Root>
 				<Table.Header>
 					<Table.Row>
-						{#if runs && runs.length > 1}<Table.Head>Month</Table.Head>{/if}
 						<Table.Head>Hour</Table.Head>
 						<Table.Head class="text-right">MHz</Table.Head>
 						<Table.Head>Propagation mode</Table.Head>
@@ -680,9 +702,8 @@
 					</Table.Row>
 				</Table.Header>
 				<Table.Body>
-					{#each rows as p (`${p.key}-${p.hour_utc}-${p.frequency_mhz}`)}
+					{#each shown as p (`${p.hour_utc}-${p.frequency_mhz}`)}
 						<Table.Row>
-							{#if runs && runs.length > 1}<Table.Cell class="font-mono tabular-nums">{p.label}</Table.Cell>{/if}
 							<Table.Cell class="font-mono tabular-nums">{String(p.hour_utc).padStart(2, '0')}:00</Table.Cell>
 							<Table.Cell class="text-right font-mono tabular-nums">{p.frequency_mhz}</Table.Cell>
 							<Table.Cell>{p.distance_km > 7000 ? '–' : p.dominant_mode}</Table.Cell>
@@ -696,9 +717,9 @@
 			</Table.Root>
 		</div>
 		<p class="text-xs text-muted-foreground">
-			Path length {rows[0].distance_km.toFixed(0)} km. Median values; MUF is exceeded on 50% of the days. A dash means the quantity does not apply to the
+			Path length {shown[0].distance_km.toFixed(0)} km. Median values; MUF is exceeded on 50% of the days. A dash means the quantity does not apply to the
 			path.
-			{#if rows[0].distance_km > 7000}
+			{#if shown[0].distance_km > 7000}
 				Beyond 7000 km the model gives the field strength of the whole path, not of single modes, so there is no propagation mode.
 			{/if}
 		</p>

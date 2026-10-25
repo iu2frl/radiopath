@@ -6,6 +6,8 @@
 </script>
 
 <script lang="ts">
+	import InfoButton from '$lib/InfoButton.svelte';
+
 	// A line chart over the hours of a day as inline SVG, so no chart library is needed.
 	let {
 		title,
@@ -13,8 +15,9 @@
 		series,
 		band,
 		refs = [],
-		yMax
-	}: { title: string; unit: string; series: Series[]; band?: Band; refs?: Ref[]; yMax?: number } = $props();
+		yMax,
+		info
+	}: { title: string; unit: string; series: Series[]; band?: Band; refs?: Ref[]; yMax?: number; info?: string } = $props();
 
 	const W = 640;
 	const H = 240;
@@ -52,8 +55,9 @@
 	}
 </script>
 
-<figure class="rounded-lg border bg-card p-3">
-	<figcaption class="mb-2 text-sm font-medium">{title} ({unit}) by UTC hour</figcaption>
+<figure class="relative rounded-lg border bg-card p-3">
+	<figcaption class="mb-2 pr-6 text-sm font-medium">{title} ({unit}) by UTC hour</figcaption>
+	{#if info}<InfoButton label="About the {title} chart" text={info} />{/if}
 	<svg viewBox="0 0 {W} {H}" class="h-auto w-full" role="img" aria-label="{title} ({unit})">
 		{#each ticks as t (t)}
 			<line x1={m.l} x2={W - m.r} y1={py(t)} y2={py(t)} stroke="var(--cp-line-soft)" />
