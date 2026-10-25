@@ -17,6 +17,8 @@ export type CoverageDetail = Schemas['CoverageDetail'];
 export type CoverageView = Schemas['CoverageView'];
 export type LegendBin = Schemas['LegendBin'];
 export type Token = Schemas['Token'];
+export type HFPredictionInput = Schemas['HFPredictionInput'];
+export type HFPoint = Schemas['HFPoint'];
 
 export const api = createClient<paths>({ baseUrl: '' });
 
