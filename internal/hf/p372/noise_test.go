@@ -12,9 +12,9 @@ import (
 // dataDir returns the P372 data directory or skips the test when absent.
 func dataDir(t *testing.T) string {
 	t.Helper()
-	dir := os.Getenv("HF_P372_DATA")
-	if dir == "" {
-		dir = filepath.Join("..", "..", "..", "tmp", "testfiles", "hf1")
+	dir := filepath.Join("..", "..", "..", "tmp", "testfiles", "hf1")
+	if root := os.Getenv("RADIOPATH_DATASET_DIR"); root != "" {
+		dir = filepath.Join(root, "hf1")
 	}
 	if _, err := os.Stat(filepath.Join(dir, "COEFF01W.txt")); err != nil {
 		if os.Getenv("HF_REQUIRE_DATA") != "" {

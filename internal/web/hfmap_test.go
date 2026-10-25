@@ -2,8 +2,6 @@ package web
 
 import (
 	"context"
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -76,17 +74,7 @@ func TestHFMapRequest(t *testing.T) {
 // TestHFMapCompute fills a frame per hour with a value for every cell; it needs the ITU data set
 // (scripts/fetch-hf-data.sh).
 func TestHFMapCompute(t *testing.T) {
-	dir := os.Getenv("HF_P533_DATA")
-	if dir == "" {
-		dir = filepath.Join("..", "..", "tmp", "testfiles", "hf1")
-	}
-	if _, err := os.Stat(filepath.Join(dir, "ionos01.bin")); err != nil {
-		if os.Getenv("HF_REQUIRE_DATA") != "" {
-			t.Fatalf("HF data not found in %s", dir)
-		}
-		t.Skipf("HF data not found in %s", dir)
-	}
-	data, err := hf.Open(dir, "")
+	data, err := hf.Open(hfDataDir(t), "")
 	if err != nil {
 		t.Fatal(err)
 	}

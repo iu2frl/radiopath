@@ -113,17 +113,7 @@ func TestFinite(t *testing.T) {
 // TestHFPredictionJSON runs the model for a path and checks that the answer has one point per hour and frequency and
 // serialises; it needs the ITU data set (scripts/fetch-hf-data.sh).
 func TestHFPredictionJSON(t *testing.T) {
-	dir := os.Getenv("HF_P533_DATA")
-	if dir == "" {
-		dir = filepath.Join("..", "..", "tmp", "testfiles", "hf1")
-	}
-	if _, err := os.Stat(filepath.Join(dir, "ionos01.bin")); err != nil {
-		if os.Getenv("HF_REQUIRE_DATA") != "" {
-			t.Fatalf("HF data not found in %s", dir)
-		}
-		t.Skipf("HF data not found in %s", dir)
-	}
-	data, err := hf.Open(dir, "")
+	data, err := hf.Open(hfDataDir(t), "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -156,4 +146,21 @@ func TestHFPattern(t *testing.T) {
 	if got := g(180, 0); got >= 9 {
 		t.Errorf("gain at the back %v, want below 9", got)
 	}
+}
+
+// hfDataDir returns the ITU data set of the HF tests, hf1 below RADIOPATH_DATASET_DIR or tmp/testfiles, and skips the
+// test without it (fails with HF_REQUIRE_DATA, as in CI).
+func hfDataDir(t *testing.T) string {
+	t.Helper()
+	dir := filepath.Join("..", "..", "tmp", "testfiles", "hf1")
+	if root := os.Getenv("RADIOPATH_DATASET_DIR"); root != "" {
+		dir = filepath.Join(root, "hf1")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "ionos01.bin")); err != nil {
+		if os.Getenv("HF_REQUIRE_DATA") != "" {
+			t.Fatalf("HF data not found in %s", dir)
+		}
+		t.Skipf("HF data not found in %s", dir)
+	}
+	return dir
 }

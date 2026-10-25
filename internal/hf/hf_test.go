@@ -19,15 +19,15 @@ import (
 func testDirs(t *testing.T) (dataDir, refDir string) {
 	t.Helper()
 	refDir = "testdata"
-	dataDir = os.Getenv("HF_P533_DATA")
-	if dataDir == "" {
-		dataDir = filepath.Join("..", "..", "tmp", "testfiles", "hf1")
+	dataDir = filepath.Join("..", "..", "tmp", "testfiles", "hf1")
+	if root := os.Getenv("RADIOPATH_DATASET_DIR"); root != "" {
+		dataDir = filepath.Join(root, "hf1")
 	}
 	if _, err := os.Stat(filepath.Join(dataDir, "ionos01.bin")); err != nil {
 		if os.Getenv("HF_REQUIRE_DATA") != "" {
 			t.Fatalf("P.533 data files not found in %s", dataDir)
 		}
-		t.Skipf("P.533 data files not found in %s (run scripts/fetch-hf-data.sh or set HF_P533_DATA)", dataDir)
+		t.Skipf("P.533 data files not found in %s (run scripts/fetch-hf-data.sh or set RADIOPATH_DATASET_DIR)", dataDir)
 	}
 	return dataDir, refDir
 }

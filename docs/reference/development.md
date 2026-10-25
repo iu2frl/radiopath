@@ -16,7 +16,8 @@ everything, including the database containers.
 
 The HF model needs the ITU data set (131 MB, pinned and checked by SHA-256), which is not part of the testfiles:
 run `scripts/fetch-hf-data.sh` once, after the clone, and it fills `tmp/testfiles/hf1` (the dataset root from
-`.env`); without it the HF page answers that the model is not configured.
+`.env`); without it the HF page answers that the model is not configured. The HF tests read it from there as
+well, or from `hf1` below an absolute `RADIOPATH_DATASET_DIR`, and skip without it.
 
 ## Make targets
 
