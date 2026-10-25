@@ -17,6 +17,7 @@ the Deployment, secrets via `secretKeyRef`.
 | `RADIOPATH_DEM_CACHE_TILES` | `8` | Tiles kept in memory; a 1" tile is 26 MB (also the size of the canopy cache, 13 MB per tile) |
 | `RADIOPATH_CANOPY_DIR` | | Directory with `.chm` canopy height tiles. Empty: no vegetation model |
 | `RADIOPATH_CANOPY_S3_PREFIX` | | Key prefix of the `.chm` tiles in the DEM bucket, e.g. `canopy1/`. Takes precedence over the directory |
+| `RADIOPATH_HF_DIR` | | Directory with the ITU-R P.533/P.372 data for the HF model (`ionosNN.bin`, `COEFFNNW.txt`, `P1239-3 Decile Factors.txt`), created by `scripts/fetch-hf-data.sh`. Empty: HF model not loaded. The server refuses to start if the directory is set but incomplete |
 | `RADIOPATH_LISTEN` | `:8080` | Listen address |
 | `RADIOPATH_METRICS_LISTEN` | `:9090` | Listen address of the Prometheus endpoint (`/metrics`). A second listener on purpose, so it is never reachable through the ingress. Empty: no metrics |
 | `RADIOPATH_LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error`. Logs are always JSON lines on stderr |

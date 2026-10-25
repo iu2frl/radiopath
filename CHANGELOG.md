@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - JSON API under `/api`, described by OpenAPI at `/api/openapi.json` with docs at `/api/docs`; the web app is built on it, other programs can use it too (by @HB9HIL)
-- HF propagation library `internal/hf`: Go port of ITU-R P.533-14 (MUF, field strength, SNR, circuit reliability) and P.372 radio noise, validated against the ITU reference implementation; reads the ITU data set from a directory, not yet exposed in the API (by @HB9HIL)
+- HF propagation library `internal/hf`: Go port of ITU-R P.533-14 (MUF, field strength, SNR, circuit reliability) and P.372 radio noise, validated against the ITU reference implementation; reads the ITU data set from `RADIOPATH_HF_DIR` (download with `scripts/fetch-hf-data.sh`), not yet exposed in the API (by @HB9HIL)
 ### Changed
 - The web interface is a SvelteKit app embedded in the binary instead of server-rendered pages: no reload after saving, a coverage page picks up its finished job by itself. Page, share and mail link URLs stay the same; only the admin panel is still rendered by the server (by @HB9HIL)
 - Rasters, reports and job events answer 401 without a session instead of redirecting to the login (by @HB9HIL)

@@ -19,6 +19,7 @@ import (
 
 	"github.com/radiopath/radiopath/internal/coverage"
 	"github.com/radiopath/radiopath/internal/dem"
+	"github.com/radiopath/radiopath/internal/hf"
 	"github.com/radiopath/radiopath/internal/link"
 	"github.com/radiopath/radiopath/internal/mail"
 	"github.com/radiopath/radiopath/internal/s3"
@@ -45,7 +46,8 @@ type config struct {
 	demCacheTiles int
 	canopyDir     string
 	canopyPrefix  string
-	listen        string
+	hfDir         string
+	listen         string
 	metricsListen string
 	logLevel      slog.Level
 	registration  bool
@@ -66,7 +68,8 @@ func loadConfig() (config, error) {
 		databaseURL:   os.Getenv("DATABASE_URL"),
 		demDir:        os.Getenv("RADIOPATH_DEM_DIR"),
 		canopyDir:     os.Getenv("RADIOPATH_CANOPY_DIR"),
-		listen:        envOr("RADIOPATH_LISTEN", ":8080"),
+		hfDir:         os.Getenv("RADIOPATH_HF_DIR"),
+		listen:         envOr("RADIOPATH_LISTEN", ":8080"),
 		metricsListen: ":9090",
 		redisURL:      os.Getenv("RADIOPATH_REDIS_URL"),
 		tileURL:       envOr("RADIOPATH_TILE_URL", tiles.DefaultUpstream),
@@ -256,6 +259,13 @@ func run(ctx context.Context, cfg config, log *slog.Logger) error {
 		}
 		canopy = dem.NewDirCanopy(cfg.canopyDir, cfg.demCacheTiles)
 		log.Info("canopy source", "dir", cfg.canopyDir)
+	}
+	if cfg.hfDir != "" {
+		// Fail at startup on a missing data set; the model has no API consumer yet.
+		if _, err := hf.Open(cfg.hfDir, ""); err != nil {
+			return fmt.Errorf("hf data dir: %w", err)
+		}
+		log.Info("hf data", "dir", cfg.hfDir)
 	}
 	srv := &web.Server{
 		Store:        st,
