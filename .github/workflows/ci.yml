@@ -38,7 +38,15 @@ jobs:
       - run: go vet ./...
       - run: go tool staticcheck ./...
       - run: go run ./cmd/radiopath openapi | cmp - web/openapi.json || { echo "web/openapi.json is stale, run 'make api' and commit"; exit 1; }
+      # ITU data set for the HF model tests (pinned and checksummed); without it they would skip, so require it.
+      - uses: actions/cache@v6
+        with:
+          path: tmp/hf-data
+          key: hf-data-${{ hashFiles('scripts/fetch-hf-data.sh') }}
+      - run: scripts/fetch-hf-data.sh
       - run: go test -race ./...
+        env:
+          HF_REQUIRE_DATA: "1"
 
   # Known vulnerabilities in code paths we call; not a need of docker-image, so a new report does not block releases.
   govulncheck:

@@ -14,9 +14,12 @@ func dataDir(t *testing.T) string {
 	t.Helper()
 	dir := os.Getenv("HF_P372_DATA")
 	if dir == "" {
-		dir = filepath.Join("..", "..", "..", "tmp", "ITU-R-HF", "P372", "Data")
+		dir = filepath.Join("..", "..", "..", "tmp", "hf-data")
 	}
 	if _, err := os.Stat(filepath.Join(dir, "COEFF01W.txt")); err != nil {
+		if os.Getenv("HF_REQUIRE_DATA") != "" {
+			t.Fatalf("P372 data not available in %s", dir)
+		}
 		t.Skipf("P372 data not available in %s", dir)
 	}
 	return dir

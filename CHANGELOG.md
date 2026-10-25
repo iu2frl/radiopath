@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The Tailwind build of the server-rendered pages (`make css`, `internal/web/ui`, the CI job `lint-css`) (by @HB9HIL)
 
 ### Chore
+- CI downloads the pinned, checksummed ITU data set and runs the HF model against 26 reference cases made with the original ITU C program (by @HB9HIL)
 - Prettier formats TypeScript and Svelte (`make format`), checked by `make check` and in CI (by @HB9HIL)
 - The Docker build context holds only the sources (`.dockerignore` as an allowlist), so a local `.env` or terrain data no longer reach it (by @HB9HIL)
 - `CONTRIBUTING.md`: development setup, code layout, conventions, the checks before a pull request and how the changelog is kept (by @HB9HIL)

@@ -12,23 +12,21 @@ import (
 	"testing"
 )
 
-// testDirs returns the directory with the ITU data files and the one with the
-// reference vectors of the C code, or skips the test when one is missing.
+// testDirs returns the directory with the ITU data files (see
+// scripts/fetch-hf-data.sh) and the one with the reference vectors of the C
+// code, or skips the test when the data is missing.
 func testDirs(t *testing.T) (dataDir, refDir string) {
 	t.Helper()
+	refDir = "testdata"
 	dataDir = os.Getenv("HF_P533_DATA")
 	if dataDir == "" {
-		dataDir = filepath.Join("..", "..", "tmp", "ITU-R-HF", "P533", "Data")
-	}
-	refDir = os.Getenv("HF_REF_DIR")
-	if refDir == "" {
-		refDir = filepath.Join("..", "..", "tmp", "hfref")
+		dataDir = filepath.Join("..", "..", "tmp", "hf-data")
 	}
 	if _, err := os.Stat(filepath.Join(dataDir, "ionos01.bin")); err != nil {
-		t.Skipf("P.533 data files not found in %s (set HF_P533_DATA)", dataDir)
-	}
-	if _, err := os.Stat(refDir); err != nil {
-		t.Skipf("reference vectors not found in %s (set HF_REF_DIR)", refDir)
+		if os.Getenv("HF_REQUIRE_DATA") != "" {
+			t.Fatalf("P.533 data files not found in %s", dataDir)
+		}
+		t.Skipf("P.533 data files not found in %s (run scripts/fetch-hf-data.sh or set HF_P533_DATA)", dataDir)
 	}
 	return dataDir, refDir
 }
@@ -54,6 +52,13 @@ func quoted(s string) string {
 		return ""
 	}
 	return s[i+1 : j]
+}
+
+// localAntenna maps the antenna path of a reference input, written on the
+// machine that ran the C code, to the file of the same name next to it.
+func localAntenna(input, path string) string {
+	base := path[strings.LastIndexAny(path, `\/`)+1:]
+	return filepath.Join(filepath.Dir(input), base)
 }
 
 // readCaseInput reads a reference input file of the C driver into a Request.
@@ -90,11 +95,11 @@ func readCaseInput(t *testing.T, name string) Request {
 			req.RxLng = num()
 		case "TXAntFilePath":
 			if q := quoted(rest); q != "ISOTROPIC" {
-				req.TxAntenna.File = q
+				req.TxAntenna.File = localAntenna(name, q)
 			}
 		case "RXAntFilePath":
 			if q := quoted(rest); q != "ISOTROPIC" {
-				req.RxAntenna.File = q
+				req.RxAntenna.File = localAntenna(name, q)
 			}
 		case "TXBearing":
 			b := num()
@@ -337,25 +342,14 @@ func TestReferenceCases(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	inputs, _ := filepath.Glob(filepath.Join(refDir, "case??.in"))
-	// Optional extra cases made with the same C reference binary.
-	extra, _ := filepath.Glob(filepath.Join(refDir, "..", "hfextra", "x??.in"))
-	inputs = append(inputs, extra...)
+	inputs, _ := filepath.Glob(filepath.Join(refDir, "[cx]*??.in"))
 	if len(inputs) == 0 {
-		t.Skip("no reference cases")
+		t.Fatal("no reference cases in testdata")
 	}
 	for _, in := range inputs {
 		name := strings.TrimSuffix(filepath.Base(in), ".in")
 		t.Run(name, func(t *testing.T) {
 			req := readCaseInput(t, in)
-			for _, a := range []string{req.TxAntenna.File, req.RxAntenna.File} {
-				if a == "" {
-					continue
-				}
-				if _, err := os.Stat(a); err != nil {
-					t.Skipf("antenna file %s not found", a)
-				}
-			}
 			rows := readRefCSV(t, strings.TrimSuffix(in, ".in")+".csv")
 			res, err := d.Predict(req)
 			if err != nil {
