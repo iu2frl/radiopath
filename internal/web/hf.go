@@ -104,8 +104,19 @@ type HFPredictionOutput struct{ Body HFPrediction }
 // parseHF validates a prediction input and returns the model request for the sites a and b.
 func parseHF(in HFPredictionInput, a, b store.Site) (hf.Request, error) {
 	var c check
+	req := hfRequest(&c, in, a, "frequencies_mhz")
+	req.RxLat, req.RxLng = b.Lat, b.Lon
+	if a.ID == b.ID {
+		c.add("", "Site A and B must differ")
+	}
+	return req, c.err()
+}
+
+// hfRequest checks the fields a prediction and a map share into c and returns the model request from the site tx,
+// without a receiver; freqField is the name of the frequency field in the caller's input.
+func hfRequest(c *check, in HFPredictionInput, tx store.Site, freqField string) hf.Request {
 	req := hf.Request{
-		TxLat: a.Lat, TxLng: a.Lon, RxLat: b.Lat, RxLng: b.Lon,
+		TxLat: tx.Lat, TxLng: tx.Lon,
 		Year:         int(c.num("year", "Year", float64(in.Year), 1900, 2100)),
 		Month:        int(c.num("month", "Month", float64(in.Month), 1, 12)),
 		SSN:          int(c.num("ssn", "Sunspot number", float64(in.SSN), 1, 311)),
@@ -136,13 +147,13 @@ func parseHF(in HFPredictionInput, a, b store.Site) (hf.Request, error) {
 	}
 	req.Hours = in.HoursUTC
 	if len(in.FrequenciesMHz) == 0 || len(in.FrequenciesMHz) > maxHFFreqs {
-		c.add("frequencies_mhz", "Frequencies: between 1 and 30 values")
+		c.add(freqField, "Frequencies: between 1 and 30 values")
 	}
 	for _, f := range in.FrequenciesMHz {
-		c.num("frequencies_mhz", "Frequency", f, 1, 30)
+		c.num(freqField, "Frequency", f, 1, 30)
 	}
 	if hasDuplicate(in.FrequenciesMHz) {
-		c.add("frequencies_mhz", "Frequencies: remove duplicates")
+		c.add(freqField, "Frequencies: remove duplicates")
 	}
 	req.Frequencies = in.FrequenciesMHz
 
@@ -170,10 +181,7 @@ func parseHF(in HFPredictionInput, a, b store.Site) (hf.Request, error) {
 	default:
 		c.add("modulation", "Modulation: must be analog or digital")
 	}
-	if a.ID == b.ID {
-		c.add("", "Site A and B must differ")
-	}
-	return req, c.err()
+	return req
 }
 
 // hasDuplicate reports whether a value occurs more than once in s.

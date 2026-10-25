@@ -6,7 +6,6 @@ import (
 	"math"
 	"net/http"
 	"runtime"
-	"strings"
 	"sync"
 	"time"
 
@@ -69,21 +68,16 @@ type HFMap struct {
 type HFMapOutput struct{ Body HFMap }
 
 // hfMapRequest validates a map input and returns the model request for the circuit from site; the receiver is set per
-// cell. Errors of the shared checks are renamed to the field of the map input.
+// cell.
 func hfMapRequest(in HFMapInput, site store.Site) (hf.Request, error) {
-	pin := HFPredictionInput{
-		SiteAID: site.ID, SiteBID: site.ID + 1, Year: in.Year, Month: in.Month, HoursUTC: in.HoursUTC, SSN: in.SSN,
+	var c check
+	req := hfRequest(&c, HFPredictionInput{
+		Year: in.Year, Month: in.Month, HoursUTC: in.HoursUTC, SSN: in.SSN,
 		FrequenciesMHz: []float64{in.FrequencyMHz}, TxPowerDBW: in.TxPowerDBW, TxGainDBi: in.TxGainDBi, RxGainDBi: in.RxGainDBi,
 		BandwidthHz: in.BandwidthHz, RequiredSNRDB: in.RequiredSNRDB, SNRPercentile: in.SNRPercentile,
 		NoiseEnvironment: in.NoiseEnvironment, Modulation: in.Modulation, Digital: in.Digital, LongPath: in.LongPath,
-	}
-	req, err := parseHF(pin, site, store.Site{ID: site.ID + 1})
-	if em, ok := err.(*huma.ErrorModel); ok {
-		for _, d := range em.Errors {
-			d.Location = strings.Replace(d.Location, "body.frequencies_mhz", "body.frequency_mhz", 1)
-		}
-	}
-	return req, err
+	}, site, "frequency_mhz")
+	return req, c.err()
 }
 
 // hfCellCentre returns the centre of the cell in a row (from the north) and a column (from the west) of the map.
