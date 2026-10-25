@@ -35,6 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The server drops requests whose headers and body take longer than 30 seconds to arrive and idle connections after two minutes (by @HB9HIL)
 
 ### Fixed
+
 - Registration no longer tells whether a user name or an address is taken: it answers the same in every case, and only the mail to that address says what happened. An unconfirmed registration no longer blocks its address for others (by @HB9HIL)
 - Mails of the public account pages go out in the background, so response times no longer tell whether an address exists (by @HB9HIL)
 - The login no longer follows a `next` parameter that the browser reads as another site, such as `/<tab>/evil.example` (by @HB9HIL)
@@ -54,6 +55,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The Tailwind build of the server-rendered pages (`make css`, `internal/web/ui`, the CI job `lint-css`) (by @HB9HIL)
 
 ### Chore
+
 - CI downloads the pinned, checksummed ITU data set and runs the HF model against 26 reference cases made with the original ITU C program (by @iu2frl)
 - CI job `hf-reference` rebuilds the ITU C program from its pinned sources and checks that it still writes the committed HF reference reports (by @iu2frl)
 - Prettier formats TypeScript and Svelte (`make format`), checked by `make check` and in CI (by @HB9HIL)
