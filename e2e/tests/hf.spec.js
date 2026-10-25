@@ -192,3 +192,43 @@ test('keeps the default sunspot number when the server has no data', async ({ pa
   await expect(page.locator('[name=ssn]')).toHaveValue('60')
   await expect(page.getByTestId('ssn-source')).toHaveCount(0)
 })
+
+test('predicts every month of a range with the hours from, to and step', async ({ page }) => {
+  const sent = []
+  await page.route('**/api/hf/predictions', (route) => {
+    const b = route.request().postDataJSON()
+    sent.push(b)
+    route.fulfill({ json: { points: b.hours_utc.map((h) => point(h, 7.1, { month: b.month })) } })
+  })
+  await page.route('**/api/hf/maps', (route) => route.fulfill({ status: 503, json: { title: 'Service Unavailable', status: 503, detail: 'no map' } }))
+  await page.goto('/hf')
+  await expect(c(page, 'button', 'Predict')).toBeEnabled()
+
+  await page.locator('[name=date_mode]').selectOption('range')
+  await expect(page.locator('[name=year]')).toHaveCount(0)
+  await page.locator('[name=range_start]').fill('2026-03')
+  await page.locator('[name=range_end]').fill('2026-05')
+  await page.locator('[name=range_from]').fill('0')
+  await page.locator('[name=range_to]').fill('12')
+  await page.locator('[name=range_step]').fill('6')
+  await c(page, 'button', 'Predict').click()
+  await expect.poll(() => sent.length).toBe(3)
+  expect(sent.map((b) => [b.year, b.month])).toEqual([[2026, 3], [2026, 4], [2026, 5]])
+  expect(sent[0].hours_utc).toEqual([6, 12, 24])
+  await expect(page.locator('[name=period]')).toHaveValue('2026-3')
+  await expect(c(page, 'th', 'Month')).toBeVisible()
+})
+
+test('rejects a range that ends before it starts or has a bad hour window', async ({ page }) => {
+  await page.goto('/hf')
+  await expect(c(page, 'button', 'Predict')).toBeEnabled()
+  await page.locator('[name=date_mode]').selectOption('range')
+  await page.locator('[name=range_start]').fill('2026-05')
+  await page.locator('[name=range_end]').fill('2026-03')
+  await page.locator('[name=range_to]').fill('30')
+  await page.locator('[name=range_step]').fill('0')
+  await c(page, 'button', 'Predict').click()
+  await expect(toast(page, 'End: before the start')).toBeVisible()
+  await expect(toast(page, 'Hours: from and to must be whole hours from 0 to 23')).toBeVisible()
+  await expect(toast(page, 'Step: must be a whole number of hours, 1 or more')).toBeVisible()
+})

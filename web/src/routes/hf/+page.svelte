@@ -1,6 +1,6 @@
 <script lang="ts">
 	import Waves from '@lucide/svelte/icons/audio-waveform';
-	import { createQuery } from '@tanstack/svelte-query';
+	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
 	import { api, call, parseNum, type HFMap, type HFPoint, type HFPredictionInput, type Site } from '$lib/api';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
@@ -16,6 +16,11 @@
 	import PageHead from '$lib/PageHead.svelte';
 
 	const now = new Date();
+	// The model knows a month and the hours of a day, so a range is one prediction per month.
+	type Period = { year: number; month: number; hours: number[] };
+	type Run = { key: string; label: string; body: HFPredictionInput; points: HFPoint[] };
+	const maxMonths = 12;
+	const qc = useQueryClient();
 	const sites = createQuery(() => ({ queryKey: ['sites'], queryFn: () => call(api.GET('/api/sites')) }));
 	const antennas = createQuery(() => ({ queryKey: ['antennas'], queryFn: () => call(api.GET('/api/antennas')) }));
 	const links = createQuery(() => ({ queryKey: ['links'], queryFn: () => call(api.GET('/api/links')) }));
@@ -45,6 +50,12 @@
 	let v = $state({
 		site_a_id: '',
 		site_b_id: '',
+		date_mode: 'month',
+		range_start: now.toISOString().slice(0, 7),
+		range_end: now.toISOString().slice(0, 7),
+		range_from: '0',
+		range_to: '23',
+		range_step: '6',
 		year: String(now.getFullYear()),
 		month: String(now.getMonth() + 1),
 		ssn: '60',
@@ -73,7 +84,8 @@
 	});
 	let busy = $state(false);
 	let error = $state<unknown>(null);
-	let points = $state<HFPoint[] | null>(null);
+	let runs = $state<Run[] | null>(null);
+	let runKey = $state('');
 	// Whether the shown points were predicted with digital modulation, which decides the reliability to show.
 	let digitalRun = $state(false);
 
@@ -91,12 +103,21 @@
 
 	// The smoothed sunspot number of the chosen month from NOAA SWPC; a 404 (no data on the server) just leaves the field alone.
 	let ssnEdited = $state(false);
-	const sunYear = $derived(parseNum(v.year));
-	const sunMonth = $derived(parseNum(v.month));
+	const sunWhen = $derived.by(() => {
+		if (v.date_mode === 'month') return { year: parseNum(v.year), month: parseNum(v.month) };
+		const i = monthIndex(v.range_start);
+		return { year: Math.floor(i / 12), month: (i % 12) + 1 };
+	});
 	const sunspot = createQuery(() => ({
-		queryKey: ['hf', 'sunspot', sunYear, sunMonth],
-		queryFn: () => call(api.GET('/api/hf/sunspots', { params: { query: { year: sunYear, month: sunMonth } } })),
-		enabled: Number.isInteger(sunYear) && sunYear >= 1749 && sunYear <= 2100 && Number.isInteger(sunMonth) && sunMonth >= 1 && sunMonth <= 12,
+		queryKey: ['hf', 'sunspot', sunWhen.year, sunWhen.month],
+		queryFn: () => sunspotQuery(sunWhen.year, sunWhen.month),
+		enabled:
+			Number.isInteger(sunWhen.year) &&
+			sunWhen.year >= 1749 &&
+			sunWhen.year <= 2100 &&
+			Number.isInteger(sunWhen.month) &&
+			sunWhen.month >= 1 &&
+			sunWhen.month <= 12,
 		retry: false,
 		staleTime: 3_600_000
 	}));
@@ -113,6 +134,48 @@
 		if (!v.site_a_id) v.site_a_id = String(list[0].id);
 		if (!v.site_b_id) v.site_b_id = String(list[Math.min(1, list.length - 1)].id);
 	});
+
+	/** Asks the server for the smoothed sunspot number of a month. */
+	function sunspotQuery(year: number, month: number) {
+		return call(api.GET('/api/hf/sunspots', { params: { query: { year, month } } }));
+	}
+
+	/** Reads "2026-10" as a month count to step through; NaN for anything else. */
+	function monthIndex(text: string): number {
+		const m = /^(\d{4})-(\d\d)$/.exec(text);
+		return m ? Number(m[1]) * 12 + Number(m[2]) - 1 : NaN;
+	}
+
+	/** The months and hours to predict: the typed month and hours, or every month from the start to the end with the hours from, to and step. Problems go to bad. */
+	function periods(bad: string[]): Period[] {
+		if (v.date_mode === 'month') {
+			const year = parseNum(v.year);
+			const month = parseNum(v.month);
+			const hours = list(v.hours_utc);
+			if (isNaN(year)) bad.push('Year: not a number');
+			if (isNaN(month)) bad.push('Month: not a number');
+			if (hours.some(isNaN)) bad.push('Hours: not a list of numbers');
+			return [{ year, month, hours }];
+		}
+		const a = monthIndex(v.range_start);
+		const b = monthIndex(v.range_end);
+		const from = parseNum(v.range_from);
+		const to = parseNum(v.range_to);
+		const step = parseNum(v.range_step);
+		if (isNaN(a)) bad.push('Start: not a month');
+		if (isNaN(b)) bad.push('End: not a month');
+		if (b < a) bad.push('End: before the start');
+		if (b - a >= maxMonths) bad.push(`Range: at most ${maxMonths} months`);
+		if (!(Number.isInteger(from) && Number.isInteger(to) && from >= 0 && to <= 23)) bad.push('Hours: from and to must be whole hours from 0 to 23');
+		else if (to < from) bad.push('Hours: to is before from');
+		if (!(Number.isInteger(step) && step >= 1)) bad.push('Step: must be a whole number of hours, 1 or more');
+		if (bad.length) return [];
+		// 0:00 is hour 24 of the model
+		const hours: number[] = [];
+		for (let h = from; h <= to; h += step) hours.push(h || 24);
+		hours.sort((x, y) => x - y);
+		return Array.from({ length: b - a + 1 }, (_, i) => ({ year: Math.floor((a + i) / 12), month: ((a + i) % 12) + 1, hours }));
+	}
 
 	/** Splits a list typed as "7.1, 14.2" into numbers; NaN marks an entry that is no number. */
 	function list(text: string): number[] {
@@ -149,11 +212,9 @@
 		for (const k of ['f0_hz', 't0_ms', 'a_db', 'tw_ms', 'fw_hz'] as const) v[k] = '0';
 	}
 
-	/** Turns the text fields into the API body; fields that are no number give one message each. */
-	function body(): HFPredictionInput {
+	/** Turns the text fields into one API body per month; fields that are no number give one message each. */
+	function bodies(): HFPredictionInput[] {
 		const nums = {
-			year: 'Year',
-			month: 'Month',
 			ssn: 'Sunspot number',
 			tx_power_dbm: 'TX power',
 			tx_gain_dbi: 'TX gain',
@@ -185,18 +246,17 @@
 				if (isNaN(dg[k])) bad.push(`${label}: not a number`);
 			}
 		}
-		const hours = list(v.hours_utc);
+		const when = periods(bad);
 		const freqs = list(v.frequencies_mhz);
-		if (hours.some(isNaN)) bad.push('Hours: not a list of numbers');
 		if (freqs.some(isNaN)) bad.push('Frequencies: not a list of numbers');
 		if (bad.length) throw invalid(...bad);
-		return {
+		return when.map((p) => ({
 			site_a_id: Number(v.site_a_id),
 			site_b_id: Number(v.site_b_id),
-			year: n.year,
-			month: n.month,
+			year: p.year,
+			month: p.month,
 			ssn: n.ssn,
-			hours_utc: hours,
+			hours_utc: p.hours,
 			frequencies_mhz: freqs,
 			tx_power_dbw: Math.round((n.tx_power_dbm - 30) * 100) / 100,
 			tx_gain_dbi: n.tx_gain_dbi,
@@ -212,7 +272,7 @@
 			modulation: v.modulation as HFPredictionInput['modulation'],
 			digital: v.modulation === 'digital' ? dg : undefined,
 			long_path: v.long_path || undefined
-		};
+		}));
 	}
 
 	/** Loads the map of a prediction at one frequency; the antennas count as isotropic with their main lobe gain. Errors show in the map panel. */
@@ -260,20 +320,53 @@
 		if (heatBody && freq !== heatFreq) void loadMap(heatBody, freq);
 	}
 
-	/** Runs the prediction and the map; nothing is stored. */
+	/** Shows the results and the map of another month of a range. */
+	function pickRun(key: string) {
+		const r = runs?.find((x) => x.key === key);
+		if (!r) return;
+		runKey = key;
+		heatBody = r.body;
+		void loadMap(r.body, r.body.frequencies_mhz.includes(heatFreq) ? heatFreq : r.body.frequencies_mhz[0]);
+	}
+
+	/** Until the user typed a sunspot number, a range uses the value of NOAA SWPC for each month. */
+	async function withSunspots(bs: HFPredictionInput[]): Promise<HFPredictionInput[]> {
+		if (ssnEdited || v.date_mode === 'month') return bs;
+		return Promise.all(
+			bs.map(async (b) => {
+				const s = await qc
+					.fetchQuery({
+						queryKey: ['hf', 'sunspot', b.year, b.month],
+						queryFn: () => sunspotQuery(b.year, b.month),
+						staleTime: 3_600_000
+					})
+					.catch(() => null);
+				return s ? { ...b, ssn: s.ssn } : b;
+			})
+		);
+	}
+
+	/** Runs the prediction of every month and the map of the first; nothing is stored. */
 	async function submit(e: SubmitEvent) {
 		e.preventDefault();
 		busy = true;
 		error = null;
 		try {
 			const digital = v.modulation === 'digital';
-			const b = body();
+			const bs = await withSunspots(bodies());
+			const b = bs[0];
 			const tx = sites.data?.find((s) => s.id === b.site_a_id);
 			const rx = sites.data?.find((s) => s.id === b.site_b_id);
 			heatBody = b;
 			heatSites = tx && rx ? { tx, rx } : null;
 			if (b.frequencies_mhz.length) void loadMap(b, b.frequencies_mhz[0]);
-			points = (await call(api.POST('/api/hf/predictions', { body: b }))).points;
+			const done: Run[] = [];
+			for (const r of bs) {
+				const points = (await call(api.POST('/api/hf/predictions', { body: r }))).points;
+				done.push({ key: `${r.year}-${r.month}`, label: `${r.year}-${String(r.month).padStart(2, '0')}`, body: r, points });
+			}
+			runKey = done[0].key;
+			runs = done;
 			digitalRun = digital;
 		} catch (err) {
 			error = err;
@@ -302,7 +395,9 @@
 
 	// One colour per frequency, shared by both charts.
 	const palette = ['var(--cp-accent)', 'var(--cp-ok)', 'var(--cp-warn)', 'var(--cp-ray)', 'var(--cp-fresnel)', 'var(--cp-canopy)'];
-	const shown = $derived(points ?? []);
+	const run = $derived(runs?.find((r) => r.key === runKey) ?? runs?.[0]);
+	const shown = $derived(run?.points ?? []);
+	const rows = $derived(runs?.flatMap((r) => r.points.map((p) => ({ ...p, key: r.key, label: r.label }))) ?? []);
 	const hours = $derived([...new Set(shown.map((p) => p.hour_utc))].sort((a, b) => a - b));
 	const freqs = $derived([...new Set(shown.map((p) => p.frequency_mhz))].sort((a, b) => a - b));
 
@@ -356,16 +451,46 @@
 		</fieldset>
 		<fieldset class="grid gap-3">
 			<legend class="mb-2 w-full border-b pb-1 text-xs font-medium text-muted-foreground">Time and ionosphere</legend>
-			<Field wide label="Year"><Input class="max-w-68 font-mono" name="year" inputmode="numeric" bind:value={v.year} /></Field>
-			<Field wide label="Month (1 to 12)"><Input class="max-w-68 font-mono" name="month" inputmode="numeric" bind:value={v.month} /></Field>
-			<Field wide label="Hours (UTC, 1 to 24)">
-				<Input class="max-w-68 font-mono" name="hours_utc" placeholder="6, 12, 18" bind:value={v.hours_utc} />
+			<Field wide label="Dates">
+				<NativeSelect class="w-68" name="date_mode" bind:value={v.date_mode}>
+					<option value="month">one month</option>
+					<option value="range">several months</option>
+				</NativeSelect>
 			</Field>
+			{#if v.date_mode === 'month'}
+				<Field wide label="Year"><Input class="max-w-68 font-mono" name="year" inputmode="numeric" bind:value={v.year} /></Field>
+				<Field wide label="Month (1 to 12)"><Input class="max-w-68 font-mono" name="month" inputmode="numeric" bind:value={v.month} /></Field>
+				<Field wide label="Hours (UTC, 1 to 24)">
+					<Input class="max-w-68 font-mono" name="hours_utc" placeholder="6, 12, 18" bind:value={v.hours_utc} />
+				</Field>
+			{:else}
+				<Field wide label="First month">
+					<Input class="max-w-68 font-mono" type="month" name="range_start" bind:value={v.range_start} />
+				</Field>
+				<Field wide label="Last month">
+					<Input class="max-w-68 font-mono" type="month" name="range_end" bind:value={v.range_end} />
+				</Field>
+				<Field wide label="Hours (UTC, 0 to 23)">
+					<span class="flex items-center gap-2">
+						<Input class="w-20 font-mono" name="range_from" inputmode="numeric" aria-label="From hour" bind:value={v.range_from} />
+						<span class="text-xs text-muted-foreground">to</span>
+						<Input class="w-20 font-mono" name="range_to" inputmode="numeric" aria-label="To hour" bind:value={v.range_to} />
+						<span class="text-xs text-muted-foreground">every</span>
+						<Input class="w-20 font-mono" name="range_step" inputmode="numeric" aria-label="Step in hours" bind:value={v.range_step} />
+						<span class="text-xs text-muted-foreground">h</span>
+					</span>
+				</Field>
+				<p class="text-xs text-muted-foreground">
+					The model gives the median day of each month at each hour, so there is no day to pick: each month of the range is one prediction.
+				</p>
+			{/if}
 			<Field wide label="Sunspot number (R12)">
 				<Input class="max-w-68 font-mono" name="ssn" inputmode="numeric" bind:value={v.ssn} oninput={() => (ssnEdited = true)} />
 				{#if sunspot.data}
 					<p class="mt-1 text-xs text-muted-foreground" data-testid="ssn-source">
-						{sunspot.data.ssn}, {sunspot.data.source} smoothed value of {sunspot.data.reference} for this month
+						{sunspot.data.ssn}, {sunspot.data.source} smoothed value of {sunspot.data.reference} for {v.date_mode === 'range'
+							? 'the first month, the others get their own'
+							: 'this month'}
 					</p>
 				{/if}
 			</Field>
@@ -513,7 +638,18 @@
 			{/if}
 		</section>
 	{/if}
-	{#if points?.length}
+	{#if rows.length}
+		{#if runs && runs.length > 1}
+			<NativeSelect
+				class="w-40"
+				name="period"
+				aria-label="Month of the charts and the map"
+				value={run?.key}
+				onchange={(e) => pickRun(e.currentTarget.value)}
+			>
+				{#each runs as r (r.key)}<option value={r.key}>{r.label}</option>{/each}
+			</NativeSelect>
+		{/if}
 		<div class="grid gap-4 md:grid-cols-2">
 			<LineChart
 				title="MUF"
@@ -533,6 +669,7 @@
 			<Table.Root>
 				<Table.Header>
 					<Table.Row>
+						{#if runs && runs.length > 1}<Table.Head>Month</Table.Head>{/if}
 						<Table.Head>Hour</Table.Head>
 						<Table.Head class="text-right">MHz</Table.Head>
 						<Table.Head>Propagation mode</Table.Head>
@@ -543,8 +680,9 @@
 					</Table.Row>
 				</Table.Header>
 				<Table.Body>
-					{#each points as p (`${p.hour_utc}-${p.frequency_mhz}`)}
+					{#each rows as p (`${p.key}-${p.hour_utc}-${p.frequency_mhz}`)}
 						<Table.Row>
+							{#if runs && runs.length > 1}<Table.Cell class="font-mono tabular-nums">{p.label}</Table.Cell>{/if}
 							<Table.Cell class="font-mono tabular-nums">{String(p.hour_utc).padStart(2, '0')}:00</Table.Cell>
 							<Table.Cell class="text-right font-mono tabular-nums">{p.frequency_mhz}</Table.Cell>
 							<Table.Cell>{p.distance_km > 7000 ? '–' : p.dominant_mode}</Table.Cell>
@@ -558,13 +696,13 @@
 			</Table.Root>
 		</div>
 		<p class="text-xs text-muted-foreground">
-			Path length {points[0].distance_km.toFixed(0)} km. Median values; MUF is exceeded on 50% of the days. A dash means the quantity does not apply to
-			the path.
-			{#if points[0].distance_km > 7000}
+			Path length {rows[0].distance_km.toFixed(0)} km. Median values; MUF is exceeded on 50% of the days. A dash means the quantity does not apply to the
+			path.
+			{#if rows[0].distance_km > 7000}
 				Beyond 7000 km the model gives the field strength of the whole path, not of single modes, so there is no propagation mode.
 			{/if}
 		</p>
-	{:else if points}
+	{:else if runs}
 		<EmptyState icon={Waves}>The model returned no points.</EmptyState>
 	{/if}
 </div>
