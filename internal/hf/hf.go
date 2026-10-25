@@ -2,6 +2,8 @@ package hf
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"sync"
 
 	"github.com/radiopath/radiopath/internal/hf/p372"
@@ -41,6 +43,23 @@ func Open(p533Dir, p372Dir string) (*Data, error) {
 		return nil, err
 	}
 	return &Data{p533Dir: p533Dir, p372Dir: p372Dir, foF2var: f}, nil
+}
+
+// Ready reports whether the data files are still there, which they are not when a mounted volume goes away after
+// startup; it only looks at the directory entries, not at the content.
+func (d *Data) Ready() error {
+	files := []string{filepath.Join(d.p533Dir, "P1239-3 Decile Factors.txt")}
+	for m := 1; m <= 12; m++ {
+		files = append(files,
+			filepath.Join(d.p533Dir, fmt.Sprintf("ionos%02d.bin", m)),
+			filepath.Join(d.p372Dir, fmt.Sprintf("COEFF%02dW.txt", m)))
+	}
+	for _, f := range files {
+		if _, err := os.Stat(f); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // month returns the data of a month (0-11), loading it on first use.

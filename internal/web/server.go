@@ -154,7 +154,7 @@ func (s *Server) spa() http.Handler {
 	})
 }
 
-// readyz answers GET /readyz with 200 only if the database, the DEM data and the tile cache are usable, otherwise 503 naming the failing part.
+// readyz answers GET /readyz with 200 only if the database, the DEM data, the HF data (when configured) and the tile cache are usable, otherwise 503 naming the failing part.
 func (s *Server) readyz(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 2e9)
 	defer cancel()
@@ -165,6 +165,12 @@ func (s *Server) readyz(w http.ResponseWriter, r *http.Request) {
 	if err := s.DEMReady(); err != nil {
 		http.Error(w, "dem: "+err.Error(), http.StatusServiceUnavailable)
 		return
+	}
+	if s.HF != nil {
+		if err := s.HF.Ready(); err != nil {
+			http.Error(w, "hf data: "+err.Error(), http.StatusServiceUnavailable)
+			return
+		}
 	}
 	if err := s.Tiles.Ready(ctx); err != nil {
 		http.Error(w, "tile cache: "+err.Error(), http.StatusServiceUnavailable)

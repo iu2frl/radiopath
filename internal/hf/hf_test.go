@@ -449,3 +449,30 @@ func TestOpenMissingData(t *testing.T) {
 		t.Errorf("got %v, want ErrOpenP1239File", err)
 	}
 }
+
+// TestReady checks that Ready names a missing data file and passes when all are present.
+func TestReady(t *testing.T) {
+	dir := t.TempDir()
+	d := &Data{p533Dir: dir, p372Dir: dir}
+	if err := d.Ready(); err == nil {
+		t.Fatal("empty directory is ready")
+	}
+	names := []string{"P1239-3 Decile Factors.txt"}
+	for m := 1; m <= 12; m++ {
+		names = append(names, fmt.Sprintf("ionos%02d.bin", m), fmt.Sprintf("COEFF%02dW.txt", m))
+	}
+	for _, n := range names {
+		if err := os.WriteFile(filepath.Join(dir, n), nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := d.Ready(); err != nil {
+		t.Fatalf("complete directory not ready: %v", err)
+	}
+	if err := os.Remove(filepath.Join(dir, "ionos07.bin")); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.Ready(); err == nil || !strings.Contains(err.Error(), "ionos07.bin") {
+		t.Errorf("got %v, want an error naming ionos07.bin", err)
+	}
+}
