@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+
 - Log in with the user name or the confirmed address of the account (by @HB9HIL)
 - JSON API under `/api`, described by OpenAPI at `/api/openapi.json` for logged-in users; the web app is built on it, other programs can use it too (by @HB9HIL)
 - The app and the admin panel send a Content-Security-Policy: scripts only from the app itself and its own inline scripts by hash, no plugins, no framing, no connections elsewhere (by @HB9HIL)
@@ -15,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `/readyz` also checks that the HF data files are still present when `RADIOPATH_HF_DIR` is set (by @iu2frl)
 
 ### Changed
+
 - Login, registration and the password pages share one centred layout that fits phones; apart from the login page they are not indexed by search engines (by @HB9HIL)
 - The web interface is a SvelteKit app embedded in the binary instead of server-rendered pages: no reload after saving, a coverage page picks up its finished job by itself. Page, share and mail link URLs stay the same; only the admin panel is still rendered by the server (by @HB9HIL)
 - Rasters, reports and job events answer 401 without a session instead of redirecting to the login (by @HB9HIL)
@@ -45,6 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Legend colours are parsed byte by byte, so a colour can never be truncated on its way into a raster or report (by @HB9HIL)
 
 ### Removed
+
 - The API docs page `/api/docs`, which loaded its scripts from a CDN; `/api/openapi.json` and `/api/schemas/` need a login (by @HB9HIL)
 - The `worker` field of coverage jobs and their event stream, which named the pod (by @HB9HIL)
 - `GET /api/password/reset/{token}`, replaced by `POST /api/password/reset/check` with the token in the body (by @HB9HIL)
