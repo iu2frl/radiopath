@@ -103,6 +103,7 @@ func (s *Server) registerAPI(api huma.API) {
 	s.registerCoverages(api)
 	s.registerHF(api)
 	s.registerHFMap(api)
+	s.registerHFSunspot(api)
 	s.registerAccount(api)
 	s.registerTokens(api)
 }

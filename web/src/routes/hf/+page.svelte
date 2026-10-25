@@ -89,6 +89,23 @@
 
 	const mode = $derived(modes.find((m) => m.id === v.mode));
 
+	// The smoothed sunspot number of the chosen month from NOAA SWPC; a 404 (no data on the server) just leaves the field alone.
+	let ssnEdited = $state(false);
+	const sunYear = $derived(parseNum(v.year));
+	const sunMonth = $derived(parseNum(v.month));
+	const sunspot = createQuery(() => ({
+		queryKey: ['hf', 'sunspot', sunYear, sunMonth],
+		queryFn: () => call(api.GET('/api/hf/sunspots', { params: { query: { year: sunYear, month: sunMonth } } })),
+		enabled: Number.isInteger(sunYear) && sunYear >= 1749 && sunYear <= 2100 && Number.isInteger(sunMonth) && sunMonth >= 1 && sunMonth <= 12,
+		retry: false,
+		staleTime: 3_600_000
+	}));
+
+	// Fills the sunspot number until the user typed one.
+	$effect(() => {
+		if (sunspot.data && !ssnEdited) v.ssn = String(sunspot.data.ssn);
+	});
+
 	// A new prediction starts from the first two sites.
 	$effect(() => {
 		const list = sites.data;
@@ -344,7 +361,14 @@
 			<Field wide label="Hours (UTC, 1 to 24)">
 				<Input class="max-w-68 font-mono" name="hours_utc" placeholder="6, 12, 18" bind:value={v.hours_utc} />
 			</Field>
-			<Field wide label="Sunspot number (R12)"><Input class="max-w-68 font-mono" name="ssn" inputmode="numeric" bind:value={v.ssn} /></Field>
+			<Field wide label="Sunspot number (R12)">
+				<Input class="max-w-68 font-mono" name="ssn" inputmode="numeric" bind:value={v.ssn} oninput={() => (ssnEdited = true)} />
+				{#if sunspot.data}
+					<p class="mt-1 text-xs text-muted-foreground" data-testid="ssn-source">
+						{sunspot.data.ssn}, {sunspot.data.source} smoothed value of {sunspot.data.reference} for this month
+					</p>
+				{/if}
+			</Field>
 		</fieldset>
 		<fieldset class="grid gap-3">
 			<legend class="mb-2 w-full border-b pb-1 text-xs font-medium text-muted-foreground">Stations</legend>

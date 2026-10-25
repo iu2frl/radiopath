@@ -165,3 +165,30 @@ test('shows why the map is missing', async ({ page }) => {
   await expect(panel.getByRole('alert')).toContainText('Too many maps')
   await expect(page.getByRole('img', { name: 'MUF (MHz)' })).toBeVisible()
 })
+
+test('fills the sunspot number from the server until it is typed', async ({ page }) => {
+  const asked = []
+  await page.route('**/api/hf/sunspots*', (route) => {
+    const q = new URL(route.request().url()).searchParams
+    asked.push(`${q.get('year')}-${q.get('month')}`)
+    route.fulfill({ json: { ssn: q.get('month') === '10' ? 88 : 94, source: 'predicted', reference: 'NOAA SWPC' } })
+  })
+  await page.goto('/hf')
+  await expect(page.locator('[name=ssn]')).toHaveValue('94')
+  await expect(page.getByTestId('ssn-source')).toContainText('predicted')
+
+  await page.locator('[name=month]').fill('10')
+  await expect(page.locator('[name=ssn]')).toHaveValue('88')
+
+  await page.locator('[name=ssn]').fill('120')
+  await page.locator('[name=month]').fill('11')
+  await expect(page.getByTestId('ssn-source')).toContainText('94')
+  await expect(page.locator('[name=ssn]')).toHaveValue('120')
+  expect(asked).toContain(`${new Date().getFullYear()}-10`)
+})
+
+test('keeps the default sunspot number when the server has no data', async ({ page }) => {
+  await page.goto('/hf')
+  await expect(page.locator('[name=ssn]')).toHaveValue('60')
+  await expect(page.getByTestId('ssn-source')).toHaveCount(0)
+})

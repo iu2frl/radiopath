@@ -283,6 +283,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/hf/sunspots": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Smoothed sunspot number of a month (NOAA SWPC), 404 when the server has none
+         * @description API token scope: `hf:read`.
+         */
+        get: operations["hf-sunspot"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/links": {
         parameters: {
             query?: never;
@@ -1383,6 +1403,20 @@ export interface components {
              * @description Year, 1900 to 2100
              */
             year: number;
+        };
+        HFSunspot: {
+            /** @description where the value comes from */
+            reference: string;
+            /**
+             * @description observed: smoothed from measurements; predicted: forecast of NOAA SWPC
+             * @enum {string}
+             */
+            source: "observed" | "predicted";
+            /**
+             * Format: int64
+             * @description 12-month smoothed sunspot number (R12), 1 to 311
+             */
+            ssn: number;
         };
         LegendBin: {
             /** @description Colour as #rrggbb */
@@ -3025,6 +3059,76 @@ export interface operations {
             };
             /** @description Service Unavailable */
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "hf-sunspot": {
+        parameters: {
+            query?: {
+                /** @description Year */
+                year?: number;
+                /** @description Month, 1 to 12 */
+                month?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HFSunspot"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };

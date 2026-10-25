@@ -25,6 +25,7 @@ import (
 	"github.com/radiopath/radiopath/internal/mail"
 	"github.com/radiopath/radiopath/internal/s3"
 	"github.com/radiopath/radiopath/internal/store"
+	"github.com/radiopath/radiopath/internal/sunspot"
 	"github.com/radiopath/radiopath/internal/tiles"
 	"github.com/radiopath/radiopath/internal/web"
 	"github.com/radiopath/radiopath/internal/webui"
@@ -51,6 +52,7 @@ type config struct {
 	canopyDir     string
 	canopyPrefix  string
 	datasetDir    string // holds the data sets in versioned subfolders, hf1/ for the HF model
+	sunspotURL    string // NOAA SWPC solar cycle files for the HF sunspot number; empty turns the download off
 	listen        string
 	metricsListen string
 	logLevel      slog.Level
@@ -80,6 +82,10 @@ func loadConfig() (config, error) {
 	}
 	if v, ok := os.LookupEnv("RADIOPATH_METRICS_LISTEN"); ok {
 		c.metricsListen = v
+	}
+	c.sunspotURL = sunspot.DefaultURL
+	if v, ok := os.LookupEnv("RADIOPATH_SUNSPOT_URL"); ok {
+		c.sunspotURL = v
 	}
 	ttl, err := time.ParseDuration(envOr("RADIOPATH_TILE_TTL", tiles.DefaultTTL.String()))
 	if err != nil || ttl <= 0 {
@@ -273,9 +279,14 @@ func run(ctx context.Context, cfg config, log *slog.Logger) error {
 		}
 		log.Info("hf data", "dir", hfDir)
 	}
+	var sunspots *sunspot.Source
+	if hfData != nil && cfg.sunspotURL != "" {
+		sunspots = sunspot.New(cfg.sunspotURL)
+	}
 	srv := &web.Server{
 		Store:        st,
 		HF:           hfData,
+		Sunspots:     sunspots,
 		Analyzer:     link.Calculator{DEM: src, Canopy: canopy},
 		Tiles:        proxy,
 		DEMReady:     demReady,
@@ -308,6 +319,11 @@ func run(ctx context.Context, cfg config, log *slog.Logger) error {
 
 	workers.Add(1)
 	go func() { defer workers.Done(); janitor(workerCtx, st, log) }()
+
+	if sunspots != nil {
+		workers.Add(1)
+		go func() { defer workers.Done(); sunspots.Run(workerCtx, log) }()
+	}
 
 	for i := 0; i < cfg.workers; i++ {
 		w := &worker.Worker{Name: fmt.Sprintf("%s/%d", host, i), Store: st, Coverage: coverage.Calculator{DEM: src}, Log: log}

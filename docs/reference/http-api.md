@@ -91,6 +91,12 @@ to east, the same reliability as in the prediction (overall for digital modulati
 The value -307 marks a cell the model could not calculate. A map is up to 15000 runs of the model, so it counts
 against its own limit of 6 maps per user and minute (429 beyond that); otherwise the errors are those of a prediction.
 
+`GET /api/hf/sunspots?year=&month=` (scope `hf:read`) returns the 12-month smoothed sunspot number (R12) of a month,
+the value for `ssn`: `ssn` (1 to 311), `source` (`observed` for the smoothed measurement, `predicted` for the forecast
+of the months NOAA has not smoothed yet) and `reference`. The server loads the values from NOAA SWPC (see
+`RADIOPATH_SUNSPOT_URL`); it answers 404 for a month without a value and while nothing is loaded. The P.533 model
+saturates at a sunspot number of 160, higher values give the same prediction.
+
 ## Errors
 
 Every error of the JSON API is an RFC 7807 problem (`application/problem+json`) with `title`, `status` and

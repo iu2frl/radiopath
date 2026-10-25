@@ -25,6 +25,7 @@ import (
 	"github.com/radiopath/radiopath/internal/link"
 	"github.com/radiopath/radiopath/internal/mail"
 	"github.com/radiopath/radiopath/internal/store"
+	"github.com/radiopath/radiopath/internal/sunspot"
 	"github.com/radiopath/radiopath/internal/tiles"
 )
 
@@ -42,6 +43,7 @@ type Server struct {
 	Store        *store.Store
 	Analyzer     link.Analyzer
 	HF           *hf.Data // nil without RADIOPATH_DATASET_DIR; the HF operation answers 503
+	Sunspots     *sunspot.Source // nil without HF data or with RADIOPATH_SUNSPOT_URL empty; the lookup answers 404
 	Tiles        *tiles.Proxy
 	DEMReady     func() error
 	Registration bool
