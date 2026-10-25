@@ -187,7 +187,7 @@ func newLogger(c config) *slog.Logger {
 // main prints the OpenAPI description or runs a user subcommand when given arguments, otherwise the server until SIGINT/SIGTERM.
 func main() {
 	if len(os.Args) == 2 && os.Args[1] == "openapi" {
-		spec, err := (&web.Server{Version: version}).OpenAPI()
+		spec, err := (&web.Server{}).OpenAPI()
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
@@ -291,6 +291,10 @@ func run(ctx context.Context, cfg config, log *slog.Logger) error {
 		Addr:              cfg.listen,
 		Handler:           srv.Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
+		// the whole request, so a slowly trickled body cannot hold a connection; no WriteTimeout, it would cut the
+		// job event streams
+		ReadTimeout: 30 * time.Second,
+		IdleTimeout: 2 * time.Minute,
 	}
 
 	host, _ := os.Hostname()

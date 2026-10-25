@@ -138,9 +138,12 @@
 
 /* Leaflet and the server-rendered plots; unlayered on purpose: leaflet.css is unlayered and would beat anything inside @layer */
 .map {
-	height: 520px;
+	height: min(520px, 55vh);
+	min-height: 280px;
 	width: 100%;
 	border: 1px solid var(--cp-line);
+	/* keeps Leaflet's pane z-indexes (400 to 1000) below the tab bar, menus and dialogs */
+	isolation: isolate;
 }
 .leaflet-container {
 	font-family: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;

@@ -76,7 +76,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Server version and enabled features */
+        /** The features the login pages offer */
         get: operations["get-config"];
         put?: never;
         post?: never;
@@ -232,7 +232,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** One link with its path analysis */
+        /**
+         * One link with its path analysis
+         * @description Runs the analysis on every call; 60 analyses, reports and raster merges per user and minute.
+         */
         get: operations["get-link"];
         /** Replace a link */
         put: operations["update-link"];
@@ -292,7 +295,7 @@ export interface paths {
         get?: never;
         /**
          * Change the address of the account
-         * @description 202: a confirmation link went to the new address, which takes effect once it is opened. 204: the address is the same.
+         * @description 202: a confirmation link went to the new address, which takes effect once it is opened; the old address gets a notice then. 204: the address is the same.
          */
         put: operations["set-my-email"];
         post?: never;
@@ -362,17 +365,20 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/password/reset/{token}": {
+    "/api/password/reset/check": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Check that a reset token is still valid */
-        get: operations["check-reset-token"];
+        get?: never;
         put?: never;
-        post?: never;
+        /**
+         * Check that a reset token is still valid
+         * @description The token goes in the body, never in a URL, so it stays out of access logs.
+         */
+        post: operations["check-reset-token"];
         delete?: never;
         options?: never;
         head?: never;
@@ -390,7 +396,7 @@ export interface paths {
         put?: never;
         /**
          * Create an account and mail the confirmation link
-         * @description 404 when registration is closed.
+         * @description 404 when registration is closed. Otherwise 204 whether or not the name or the address is taken, so neither can be probed; the address gets a mail that says which case it was.
          */
         post: operations["register"];
         delete?: never;
@@ -577,7 +583,6 @@ export interface components {
             password_reset: boolean;
             /** @description Whether new accounts can register */
             registration: boolean;
-            version: string;
         };
         Coverage: {
             /** @description Extent of the raster; missing until computed */
@@ -801,7 +806,6 @@ export interface components {
             started_at: string | null;
             /** @enum {string} */
             state: "idle" | "queued" | "running" | "done" | "failed";
-            worker: string;
         };
         CoverageView: {
             /** @description Whether the range circles are drawn */
@@ -813,6 +817,11 @@ export interface components {
             opacity: number;
             /** @description Other computed coverages merged into the map */
             overlays: number[];
+        };
+        EmailChangeInputBody: {
+            email: string;
+            /** @description The password in use, so a stolen session cannot take over the account */
+            password: string;
         };
         EmailInputBody: {
             email: string;
@@ -1213,6 +1222,7 @@ export interface components {
             tx_tilt_deg?: number;
         };
         LoginInputBody: {
+            /** @description User name or confirmed address */
             name: string;
             password: string;
         };
@@ -1260,6 +1270,8 @@ export interface components {
             email: string;
             name: string;
             verified: boolean;
+            /** @description Server version; only logged-in users see it */
+            version: string;
         };
         NameInputBody: {
             name: string;
@@ -2300,6 +2312,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ErrorModel"];
                 };
             };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
             /** @description Internal Server Error */
             500: {
                 headers: {
@@ -2554,7 +2575,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["EmailInputBody"];
+                "application/json": components["schemas"]["EmailChangeInputBody"];
             };
         };
         responses: {
@@ -2773,12 +2794,14 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path: {
-                token: string;
-            };
+            path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TokenInputBody"];
+            };
+        };
         responses: {
             /** @description No Content */
             204: {
@@ -2847,15 +2870,6 @@ export interface operations {
             };
             /** @description Not Found */
             404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-            /** @description Conflict */
-            409: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -225,8 +225,14 @@ func (s *Server) registerLinks(api huma.API) {
 		return s.linkOut(ctx, owner, id)
 	})
 
-	huma.Register(api, op("get-link", http.MethodGet, "/api/links/{id}", scopeLinksRead, "One link with its path analysis"),
+	o = op("get-link", http.MethodGet, "/api/links/{id}", scopeLinksRead, "One link with its path analysis")
+	o.Errors = append(o.Errors, http.StatusTooManyRequests)
+	o.Description = "Runs the analysis on every call; 60 analyses, reports and raster merges per user and minute."
+	huma.Register(api, o,
 		func(ctx context.Context, in *IDPath) (*LinkDetailOutput, error) {
+			if err := s.computeHit(ctx, userOf(ctx).ID); err != nil {
+				return nil, err
+			}
 			l, err := s.Store.GetLink(ctx, userOf(ctx).ID, in.ID)
 			if err != nil {
 				return nil, s.storeErr(err)
@@ -287,7 +293,7 @@ func (s *Server) registerLinks(api huma.API) {
 	o = op("get-shared-link", http.MethodGet, "/api/share/links/{token}", "", "A shared link with its path analysis, for anyone with the token")
 	o.Errors = []int{http.StatusNotFound, http.StatusTooManyRequests}
 	huma.Register(api, o, func(ctx context.Context, in *TokenPath) (*LinkDetailOutput, error) {
-		if err := s.shareHit(ctx, in.Token); err != nil {
+		if err := s.shareHit(ctx, "l", in.Token); err != nil {
 			return nil, err
 		}
 		l, err := s.Store.GetSharedLink(ctx, in.Token)
@@ -365,7 +371,7 @@ func (s *Server) linkAnalysis(ctx context.Context, l store.LinkWithSites) linkDa
 	})
 	if err != nil {
 		s.Log.Warn("link analysis failed", "link", l.ID, "err", err)
-		data.Error = err.Error()
+		data.Error = link.Reason(err)
 	} else {
 		data.Result = &res
 	}

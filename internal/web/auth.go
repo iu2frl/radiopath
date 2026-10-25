@@ -28,11 +28,13 @@ const (
 	bcryptCost       = 12
 	maxPasswordBytes = 72 // bcrypt rejects longer input instead of truncating
 
-	loginWindow    = 15 * time.Minute
-	loginIPMax     = 20
-	loginUserMax   = 5
-	registerWindow = time.Hour
-	registerIPMax  = 5
+	loginWindow     = 15 * time.Minute
+	loginIPMax      = 20
+	loginPairMax    = 5   // per name and IP: one attacker cannot lock the owner out from elsewhere
+	loginUserMax    = 100 // per name from all IPs: caps guessing spread over many addresses
+	registerWindow  = time.Hour
+	registerIPMax   = 5
+	registerMailMax = 3 // mails per address, so registering cannot flood a mailbox from many IPs
 )
 
 // clientIP returns the caller's IP; behind a trusted proxy it takes the last X-Forwarded-For entry, which is the one our proxy appended.
@@ -54,6 +56,9 @@ func (s *Server) clientIP(r *http.Request) string {
 func tooMany(window time.Duration) string {
 	return fmt.Sprintf("Too many attempts. Try again in %d minutes.", int(window.Minutes()))
 }
+
+// dummyHash is compared for unknown names, so they cost the same bcrypt work as known ones (TestDummyHash).
+const dummyHash = "$2a$12$invalidinvalidinvalidinvalidinvalidinvalidinvalidinval"
 
 type ctxKey int
 
@@ -136,7 +141,7 @@ func (s *Server) maintenanceErr(ctx context.Context) error {
 
 type LoginInput struct {
 	Body struct {
-		Name     string `json:"name"`
+		Name     string `json:"name" doc:"User name or confirmed address"`
 		Password string `json:"password"`
 	}
 }
@@ -149,6 +154,7 @@ type Me struct {
 	Name     string `json:"name"`
 	Email    string `json:"email" doc:"Empty until an address is confirmed"`
 	Verified bool   `json:"verified"`
+	Version  string `json:"version" doc:"Server version; only logged-in users see it"`
 }
 
 type MeOutput struct{ Body Me }
@@ -169,35 +175,48 @@ func (s *Server) registerAuth(api huma.API) {
 				s.Log.Warn("logout", "err", err)
 			}
 		}
-		return &SessionOutput{SetCookie: http.Cookie{Name: sessionCookie, Value: "", Path: "/", HttpOnly: true, MaxAge: -1}}, nil
+		return &SessionOutput{SetCookie: http.Cookie{Name: sessionCookie, Value: "", Path: "/", HttpOnly: true,
+			Secure: reqInfo(ctx).secure, SameSite: http.SameSiteLaxMode, MaxAge: -1}}, nil
 	})
 
 	o = op("register", http.MethodPost, "/api/register", "", "Create an account and mail the confirmation link")
 	o.DefaultStatus = http.StatusNoContent
-	o.Errors = []int{http.StatusNotFound, http.StatusConflict, http.StatusTooManyRequests, http.StatusServiceUnavailable}
-	o.Description = "404 when registration is closed."
+	o.Errors = []int{http.StatusNotFound, http.StatusTooManyRequests, http.StatusServiceUnavailable}
+	o.Description = "404 when registration is closed. Otherwise 204 whether or not the name or the address is taken, so " +
+		"neither can be probed; the address gets a mail that says which case it was."
 	huma.Register(api, o, s.register)
 
 	huma.Register(api, op("get-me", http.MethodGet, "/api/me", scopeAccountRead, "The logged-in user"),
 		func(ctx context.Context, _ *struct{}) (*MeOutput, error) {
 			u := userOf(ctx)
-			return &MeOutput{Body: Me{Name: u.Name, Email: u.Email, Verified: u.Verified}}, nil
+			return &MeOutput{Body: Me{Name: u.Name, Email: u.Email, Verified: u.Verified, Version: s.Version}}, nil
 		})
 }
 
-// login checks the credentials, counts failures against the IP and user rate limits and starts a session on success; unverified accounts get a 403.
+// login resolves a confirmed address to its user name, checks the credentials, counts failures against the IP, name-and-IP and name rate limits and starts a session on success; unverified accounts get a 403.
 func (s *Server) login(ctx context.Context, in *LoginInput) (*SessionOutput, error) {
 	name := strings.ToLower(strings.TrimSpace(in.Body.Name))
 	ip := reqInfo(ctx).ip
 	if err := s.maintenanceErr(ctx); err != nil {
 		return nil, err
 	}
+	// An address stands for the name of its confirmed account, so both count against the same limits; an unknown
+	// address stays as typed and fails like an unknown name.
+	if strings.Contains(name, "@") {
+		u, err := s.Store.UserByEmail(ctx, name)
+		if err != nil && !errors.Is(err, store.ErrNotFound) {
+			return nil, s.storeErr(err)
+		}
+		if err == nil {
+			name = u.Name
+		}
+	}
 
-	ipKey, nameKey := "login:ip:"+ip, "login:user:"+name
-	for _, l := range []struct {
+	limits := []struct {
 		key string
 		max int
-	}{{ipKey, loginIPMax}, {nameKey, loginUserMax}} {
+	}{{"login:ip:" + ip, loginIPMax}, {"login:pair:" + name + ":" + ip, loginPairMax}, {"login:user:" + name, loginUserMax}}
+	for _, l := range limits {
 		n, err := s.Store.RateCount(ctx, l.key, loginWindow)
 		if err != nil {
 			return nil, s.storeErr(err)
@@ -211,15 +230,15 @@ func (s *Server) login(ctx context.Context, in *LoginInput) (*SessionOutput, err
 
 	u, hash, err := s.Store.Credentials(ctx, name)
 	if errors.Is(err, store.ErrNotFound) {
-		hash, err = "$2a$12$invalidinvalidinvalidinvalidinvalidinvalidinvalidinval", nil
+		hash, err = dummyHash, nil
 	}
 	if err != nil {
 		return nil, s.storeErr(err)
 	}
 	// unknown users burn a real bcrypt compare so names cannot be probed
 	if u.ID == 0 || bcrypt.CompareHashAndPassword([]byte(hash), []byte(in.Body.Password)) != nil {
-		for _, k := range []string{ipKey, nameKey} {
-			if _, err := s.Store.RateHit(ctx, k, loginWindow); err != nil {
+		for _, l := range limits {
+			if _, err := s.Store.RateHit(ctx, l.key, loginWindow); err != nil {
 				s.Log.Warn("rate limit", "err", err)
 			}
 		}
@@ -284,7 +303,9 @@ type RegisterInput struct {
 	}
 }
 
-// register handles POST /api/register: per-IP rate limit, validation, account creation and the confirmation mail.
+// register handles POST /api/register: per-IP rate limit, validation, then exactly one mail to the address: the
+// confirmation link, a note that the address already has an account, or that the name is taken. The answer is the
+// same in all three cases.
 func (s *Server) register(ctx context.Context, in *RegisterInput) (*struct{}, error) {
 	if !s.Registration || s.Mail == nil {
 		return nil, huma.Error404NotFound("Registration is closed")
@@ -316,13 +337,29 @@ func (s *Server) register(ctx context.Context, in *RegisterInput) (*struct{}, er
 	if len(errs) > 0 {
 		return nil, huma.Error422UnprocessableEntity("Invalid input", errs...)
 	}
+	// counted before anything is looked up, so the limit says nothing about the address
+	if n, err := s.Store.RateHit(ctx, "register:mail:"+strings.ToLower(email), registerWindow); err != nil {
+		return nil, s.storeErr(err)
+	} else if n > registerMailMax {
+		s.Log.Warn("registration mails rate limited", "remote", ip)
+		return nil, huma.Error429TooManyRequests(tooMany(registerWindow))
+	}
 	hash, err := HashPassword(in.Body.Password)
 	if err != nil {
 		return nil, s.storeErr(err)
 	}
+	if u, err := s.Store.UserByEmail(ctx, email); err == nil {
+		s.mailLater(email, "Your Radiopath account", fmt.Sprintf(knownMail, u.Name, s.BaseURL+"/forgot"))
+		s.Log.Info("registration for a taken address", "remote", ip)
+		return nil, nil
+	} else if !errors.Is(err, store.ErrNotFound) {
+		return nil, s.storeErr(err)
+	}
 	id, err := s.Store.Register(ctx, name, email, hash)
 	if errors.Is(err, store.ErrExists) {
-		return nil, huma.Error409Conflict("User name or address is already taken")
+		s.mailLater(email, "Choose another Radiopath user name", fmt.Sprintf(nameTakenMail, name, s.BaseURL+"/register"))
+		s.Log.Info("registration for a taken name", "remote", ip)
+		return nil, nil
 	}
 	if err != nil {
 		return nil, s.storeErr(err)

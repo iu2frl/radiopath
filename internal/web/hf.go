@@ -201,12 +201,15 @@ func toHFPoint(p hf.Point) HFPoint {
 func (s *Server) registerHF(api huma.API) {
 	o := op("predict-hf", http.MethodPost, "/api/hf/predictions", scopeHFRead,
 		"HF circuit prediction between two sites (ITU-R P.533), nothing is stored")
-	o.Errors = append(o.Errors, http.StatusUnprocessableEntity, http.StatusServiceUnavailable)
+	o.Errors = append(o.Errors, http.StatusUnprocessableEntity, http.StatusTooManyRequests, http.StatusServiceUnavailable)
 	huma.Register(api, o, func(ctx context.Context, in *struct{ Body HFPredictionInput }) (*HFPredictionOutput, error) {
 		if s.HF == nil {
 			return nil, huma.Error503ServiceUnavailable("The HF model is not configured on this server")
 		}
 		owner := userOf(ctx).ID
+		if err := s.computeHit(ctx, owner); err != nil {
+			return nil, err
+		}
 		a, err := s.Store.GetSite(ctx, owner, in.Body.SiteAID)
 		if err != nil {
 			return nil, s.storeErr(err)

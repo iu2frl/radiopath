@@ -1,16 +1,25 @@
 package web
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
 	"embed"
+	"encoding/base64"
 	"errors"
+	"fmt"
 	"html/template"
 	"io/fs"
 	"log/slog"
 	"net/http"
 	"path"
+	"regexp"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
+
+	"github.com/danielgtaylor/huma/v2"
 
 	"github.com/radiopath/radiopath/internal/hf"
 	"github.com/radiopath/radiopath/internal/link"
@@ -40,12 +49,16 @@ type Server struct {
 	BaseURL      string
 	TrustProxy   bool
 	AdminToken   string
-	Version      string
+	Version      string // shown to logged-in users only (/api/me)
 	Log          *slog.Logger
 	// UI holds the built SPA (webui.FS()), served for every path no route claims.
 	UI fs.FS
 
-	tmpl map[string]*template.Template
+	tmpl     map[string]*template.Template
+	adminCSP string
+
+	streamsMu sync.Mutex
+	streams   map[int64]int // open job event streams per user
 }
 
 // Handler parses the admin templates and builds the route tree: health, tiles, the JSON API, the binary routes of
@@ -55,6 +68,12 @@ func (s *Server) Handler() http.Handler {
 	for _, p := range pages {
 		s.tmpl[p] = template.Must(template.ParseFS(templateFS, "templates/admin_layout.html", "templates/"+p+".html"))
 	}
+	// hash the rendered page, not the template: html/template drops comments inside scripts
+	var login bytes.Buffer
+	if err := s.tmpl["admin_login"].Execute(&login, adminLoginData{base: base{Admin: true}}); err != nil {
+		panic(err)
+	}
+	s.adminCSP = csp(login.Bytes(), "", "default-src 'none'; style-src 'unsafe-inline'; img-src 'self'; font-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")
 
 	if s.Tiles != nil {
 		s.Tiles.ClientIP = s.clientIP
@@ -62,10 +81,10 @@ func (s *Server) Handler() http.Handler {
 
 	root := http.NewServeMux()
 	user := func(h http.HandlerFunc) http.Handler { return s.requireUser(h) }
-	root.Handle("GET /links/{id}/report.pdf", user(s.linkReport))
-	root.Handle("GET /coverages/{id}/report.pdf", user(s.coverageReport))
+	root.Handle("GET /links/{id}/report.pdf", user(s.computeLimited(s.linkReport)))
+	root.Handle("GET /coverages/{id}/report.pdf", user(s.computeLimited(s.coverageReport)))
 	root.Handle("GET /coverages/{id}/image.png", user(s.coverageImage))
-	root.Handle("GET /coverages/{id}/composite.png", user(s.coverageComposite))
+	root.Handle("GET /coverages/{id}/composite.png", user(s.computeLimited(s.coverageComposite)))
 	root.Handle("GET /coverages/{id}/events", user(s.coverageEvents))
 
 	if s.adminEnabled() {
@@ -107,7 +126,7 @@ func (s *Server) Handler() http.Handler {
 	root.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte("ok\n")) })
 	root.HandleFunc("GET /readyz", s.readyz)
 	api := s.api()
-	root.Handle("/api/", s.authenticate(api))
+	root.Handle("/api/", s.authenticate(privateSpec(api)))
 	root.Handle("/", spa)
 
 	return secureHeaders(instrument(root, map[string]*http.ServeMux{"/api/": api}, http.NewCrossOriginProtection().Handler(root)))
@@ -124,10 +143,33 @@ func secureHeaders(next http.Handler) http.Handler {
 	})
 }
 
+var inlineScript = regexp.MustCompile(`(?s)<script>(.*?)</script>`)
+
+// csp returns a Content-Security-Policy whose script-src allows sources plus, by hash, exactly the inline scripts of
+// page, followed by the other directives in rest. Pages only carry fixed scripts, so the hashes hold for every response.
+func csp(page []byte, sources, rest string) string {
+	src := "script-src"
+	if sources != "" {
+		src += " " + sources
+	}
+	for _, m := range inlineScript.FindAllSubmatch(page, -1) {
+		sum := sha256.Sum256(m[1])
+		src += " 'sha256-" + base64.StdEncoding.EncodeToString(sum[:]) + "'"
+	}
+	return src + "; " + rest
+}
+
 // spa serves the SvelteKit build: existing files as they are, any other path without a file extension the index.html fallback.
 // Unknown API paths, _app assets and files answer 404, so a stale bundle fails loudly instead of loading HTML.
 func (s *Server) spa() http.Handler {
 	files := http.FileServerFS(s.UI)
+	var index []byte
+	if s.UI != nil { // tests of other routes build the handler without a UI
+		index, _ = fs.ReadFile(s.UI, "index.html")
+	}
+	// Leaflet and Svelte transitions set style attributes; rasters arrive as blob: URLs, tiles through our own proxy.
+	policy := csp(index, "'self'", "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; "+
+		"connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'")
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/api/") || (r.Method != http.MethodGet && r.Method != http.MethodHead) {
 			http.NotFound(w, r)
@@ -145,6 +187,7 @@ func (s *Server) spa() http.Handler {
 			r = r.Clone(r.Context())
 			r.URL.Path = "/"
 		}
+		w.Header().Set("Content-Security-Policy", policy)
 		if strings.HasPrefix(name, "_app/immutable/") {
 			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 		} else {
@@ -154,27 +197,64 @@ func (s *Server) spa() http.Handler {
 	})
 }
 
-// readyz answers GET /readyz with 200 only if the database, the DEM data, the HF data (when configured) and the tile cache are usable, otherwise 503 naming the failing part.
+const (
+	computeWindow  = time.Minute
+	computeUserMax = 60
+)
+
+// computeHit counts one expensive request of user (path analysis, report, raster merge) and answers 429 over
+// computeUserMax per minute, so a single account cannot keep the CPUs busy.
+func (s *Server) computeHit(ctx context.Context, user int64) error {
+	n, err := s.Store.RateHit(ctx, fmt.Sprintf("compute:user:%d", user), computeWindow)
+	if err != nil {
+		return s.storeErr(err)
+	}
+	if n > computeUserMax {
+		s.Log.Warn("compute rate limited", "user", user)
+		return huma.Error429TooManyRequests("Too many calculations, try again in a minute.")
+	}
+	return nil
+}
+
+// computeLimited puts computeHit in front of a binary route of the logged-in user.
+func (s *Server) computeLimited(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if err := s.computeHit(r.Context(), currentUser(r).ID); err != nil {
+			var se huma.StatusError
+			if errors.As(err, &se) && se.GetStatus() == http.StatusTooManyRequests {
+				http.Error(w, "too many requests", http.StatusTooManyRequests)
+				return
+			}
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		next(w, r)
+	}
+}
+
+// readyz answers GET /readyz with 200 only if the database, the DEM data and the tile cache are usable, otherwise 503.
+// The failing part and its error go to the log only: the endpoint is public and errors name hosts and buckets.
 func (s *Server) readyz(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 2e9)
 	defer cancel()
-	if err := s.Store.Ping(ctx); err != nil {
-		http.Error(w, "database: "+err.Error(), http.StatusServiceUnavailable)
-		return
+	type part struct {
+		name string
+		err  func() error
 	}
-	if err := s.DEMReady(); err != nil {
-		http.Error(w, "dem: "+err.Error(), http.StatusServiceUnavailable)
-		return
+	parts := []part{
+		{"database", func() error { return s.Store.Ping(ctx) }},
+		{"dem", s.DEMReady},
 	}
 	if s.HF != nil {
-		if err := s.HF.Ready(); err != nil {
-			http.Error(w, "hf data: "+err.Error(), http.StatusServiceUnavailable)
+		parts = append(parts, part{"hf data", s.HF.Ready})
+	}
+	parts = append(parts, part{"tile cache", func() error { return s.Tiles.Ready(ctx) }})
+	for _, c := range parts {
+		if err := c.err(); err != nil {
+			s.Log.Warn("not ready", "part", c.name, "err", err)
+			http.Error(w, "not ready", http.StatusServiceUnavailable)
 			return
 		}
-	}
-	if err := s.Tiles.Ready(ctx); err != nil {
-		http.Error(w, "tile cache: "+err.Error(), http.StatusServiceUnavailable)
-		return
 	}
 	w.Write([]byte("ok\n"))
 }
@@ -182,6 +262,7 @@ func (s *Server) readyz(w http.ResponseWriter, r *http.Request) {
 // render executes the named page template with the given status.
 func (s *Server) render(w http.ResponseWriter, status int, page string, data any) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Content-Security-Policy", s.adminCSP)
 	w.WriteHeader(status)
 	if err := s.tmpl[page].Execute(w, data); err != nil {
 		s.Log.Error("render", "page", page, "err", err)

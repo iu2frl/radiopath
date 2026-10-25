@@ -7,14 +7,18 @@ export const adminToken = 'e2e-only-admin-token-not-a-secret-1234'
 export const password = 'e2e-password-1'
 
 // one user per spec file, so the files run in parallel without seeing each other's data; created by global-setup.js
-export const users = ['account', 'admin', 'antennas', 'auth', 'coverage', 'links', 'owner-a', 'owner-b', 'share', 'sites']
+export const users = ['account', 'admin', 'antennas', 'auth', 'coverage', 'links', 'mobile', 'owner-a', 'owner-b', 'share', 'sites']
 
-// map tiles are stubbed in the browser, nothing reaches the tile server; confirm() dialogs are accepted
+// map tiles are stubbed in the browser, nothing reaches the tile server; confirm() dialogs of the admin panel are accepted;
+// anything the Content-Security-Policy blocks fails the test
 export const test = base.extend({
   page: async ({ page }, use) => {
+    const blocked = []
+    page.on('console', (m) => m.type() === 'error' && /Content Security Policy/i.test(m.text()) && blocked.push(m.text()))
     await page.route('**/tiles/**', (route) => route.fulfill({ status: 204 }))
     page.on('dialog', (dialog) => dialog.accept())
     await use(page)
+    expect(blocked, 'blocked by the Content-Security-Policy').toEqual([])
   },
 })
 
@@ -25,6 +29,21 @@ export function c(scope, selector, text) {
 }
 
 export const pathname = (page) => new URL(page.url()).pathname
+
+/** The toast that contains text. */
+export const toast = (page, text) => page.locator('[data-sonner-toast]', { hasText: text }).first()
+
+/** Opens the ⋯ menu of the table row containing row and picks an action. */
+export async function rowAction(page, row, name) {
+  await c(page, 'tr', row).getByRole('button', { name: 'Actions' }).click()
+  await page.getByRole('menuitem', { name, exact: true }).click()
+}
+
+/** Confirms the open confirmation dialog with its action button. */
+export const confirmDialog = (page, action = 'Delete') => page.getByRole('alertdialog').getByRole('button', { name: action }).click()
+
+/** Opens the user menu in the header. */
+export const userMenu = (page) => page.locator('header [aria-haspopup="menu"]').click()
 
 /** A page in its own context for setup in beforeAll. */
 export const newPage = (browser) => browser.newPage({ baseURL })
@@ -70,9 +89,9 @@ export async function computeCoverage(page, name, rangeKm) {
   await expect(page.locator('#job-badge')).toHaveText('done', { timeout: 120000 })
 }
 
-/** The first URL in the newest mail to an address. */
-export async function mailLink(page, to) {
-  const query = encodeURIComponent('to:' + to)
+/** The first URL in the newest mail to an address, optionally only among mails whose subject contains subject. */
+export async function mailLink(page, to, subject = '') {
+  const query = encodeURIComponent('to:' + to + (subject ? ` subject:"${subject}"` : ''))
   let id
   await expect.poll(async () => {
     id = (await (await page.request.get(`${mailpit}/api/v1/search?query=${query}`)).json()).messages[0]?.ID
