@@ -45,6 +45,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- HF integration tests now look for the dataset in the directory populated by the CI fetch step (by @HB9HIL)
 - The HF reliability map now follows the prediction's long-path setting, and duplicate hours or frequencies are rejected before results are rendered (by @iu2frl)
 - Changing the address on a server without mail configured crashed the whole server; it now answers that mail is not configured, and a mail without a mailer is only logged (by @HB9HIL)
 - Registration no longer tells whether a user name or an address is taken: it answers the same in every case, and only the mail to that address says what happened. An unconfirmed registration no longer blocks its address for others (by @HB9HIL)

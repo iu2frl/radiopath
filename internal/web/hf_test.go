@@ -95,7 +95,7 @@ func TestFinite(t *testing.T) {
 func TestHFPredictionJSON(t *testing.T) {
 	dir := os.Getenv("HF_P533_DATA")
 	if dir == "" {
-		dir = filepath.Join("..", "..", "tmp", "dataset", "hf1")
+		dir = filepath.Join("..", "..", "tmp", "testfiles", "hf1")
 	}
 	if _, err := os.Stat(filepath.Join(dir, "ionos01.bin")); err != nil {
 		if os.Getenv("HF_REQUIRE_DATA") != "" {
