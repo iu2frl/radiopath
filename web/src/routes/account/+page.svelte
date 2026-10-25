@@ -90,6 +90,13 @@
 			>
 			<div><Button type="submit">Change password</Button></div>
 		</form>
-		<p class="mt-2 text-xs text-muted-foreground">At least 10 characters. Changing it logs out every other device.</p>
+		<p class="mt-2 text-xs text-muted-foreground">At least 10 characters. Changing it logs out every other device; API tokens keep working.</p>
+		<div class="mt-4 flex items-center justify-between gap-3 rounded-lg border bg-card p-4">
+			<div>
+				<div class="text-sm font-medium">API tokens</div>
+				<div class="text-xs text-muted-foreground">Let other programs use the API on your behalf.</div>
+			</div>
+			<Button variant="outline" href="/tokens">Manage</Button>
+		</div>
 	{/if}
 </div>

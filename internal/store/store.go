@@ -20,6 +20,7 @@ const (
 	MaxSitesPerUser     = 200
 	MaxCoveragesPerUser = 50
 	MaxJobsPerUser      = 2
+	MaxTokensPerUser    = 20
 )
 
 type Store struct {

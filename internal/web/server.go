@@ -78,12 +78,13 @@ func (s *Server) Handler() http.Handler {
 	}
 
 	root := http.NewServeMux()
-	user := func(h http.HandlerFunc) http.Handler { return s.requireUser(h) }
-	root.Handle("GET /links/{id}/report.pdf", user(s.computeLimited(s.linkReport)))
-	root.Handle("GET /coverages/{id}/report.pdf", user(s.computeLimited(s.coverageReport)))
-	root.Handle("GET /coverages/{id}/image.png", user(s.coverageImage))
-	root.Handle("GET /coverages/{id}/composite.png", user(s.computeLimited(s.coverageComposite)))
-	root.Handle("GET /coverages/{id}/events", user(s.coverageEvents))
+	links := func(h http.HandlerFunc) http.Handler { return s.requireUser(scopeLinksRead, h) }
+	coverages := func(h http.HandlerFunc) http.Handler { return s.requireUser(scopeCoveragesRead, h) }
+	root.Handle("GET /links/{id}/report.pdf", links(s.computeLimited(s.linkReport)))
+	root.Handle("GET /coverages/{id}/report.pdf", coverages(s.computeLimited(s.coverageReport)))
+	root.Handle("GET /coverages/{id}/image.png", coverages(s.coverageImage))
+	root.Handle("GET /coverages/{id}/composite.png", coverages(s.computeLimited(s.coverageComposite)))
+	root.Handle("GET /coverages/{id}/events", coverages(s.coverageEvents))
 
 	if s.adminEnabled() {
 		admin := http.NewServeMux()

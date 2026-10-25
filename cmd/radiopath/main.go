@@ -37,6 +37,9 @@ const janitorInterval = time.Hour
 
 const unconfirmedMaxAge = 7 * 24 * time.Hour
 
+// expired API tokens stay listed this long, so their owner sees why a client stopped working
+const expiredTokenKeep = 30 * 24 * time.Hour
+
 type config struct {
 	databaseURL   string
 	demDir        string
@@ -335,7 +338,7 @@ func run(ctx context.Context, cfg config, log *slog.Logger) error {
 	return err
 }
 
-// janitor periodically removes expired sessions, rate limits, email tokens and unconfirmed users until ctx ends.
+// janitor periodically removes expired sessions, rate limits, email tokens, long expired API tokens and unconfirmed users until ctx ends.
 func janitor(ctx context.Context, st *store.Store, log *slog.Logger) {
 	tick := time.NewTicker(janitorInterval)
 	defer tick.Stop()
@@ -350,6 +353,9 @@ func janitor(ctx context.Context, st *store.Store, log *slog.Logger) {
 		}
 		if _, err := st.DeleteExpiredEmailTokens(ctx); err != nil {
 			log.Warn("email token cleanup", "err", err)
+		}
+		if _, err := st.DeleteExpiredTokens(ctx, expiredTokenKeep); err != nil {
+			log.Warn("API token cleanup", "err", err)
 		}
 		if n, err := st.DeleteUnconfirmedUsers(ctx, unconfirmedMaxAge); err != nil {
 			log.Warn("unconfirmed account cleanup", "err", err)

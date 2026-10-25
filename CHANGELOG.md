@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Log in with the user name or the confirmed address of the account (by @HB9HIL)
+- Personal API tokens for other programs and scripts, under API tokens in the user menu: access per resource (none, read, read and write), an expiration date or none, shown once, revocable at any time; creating one needs the password and is mailed to the confirmed address (by @HB9HIL)
+- An interactive API reference in the app (API reference in the user menu), with the scope of every operation, code examples and test requests; bundled, nothing is loaded from outside (by @HB9HIL)
 - JSON API under `/api`, described by OpenAPI at `/api/openapi.json` for logged-in users; the web app is built on it, other programs can use it too (by @HB9HIL)
 - The app and the admin panel send a Content-Security-Policy: scripts only from the app itself and its own inline scripts by hash, no plugins, no framing, no connections elsewhere (by @HB9HIL)
 

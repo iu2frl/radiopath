@@ -77,13 +77,41 @@ Public answers say as little about the installation as possible:
 
 - The version only for logged-in users (footer, `/api/me`), besides the log and
   the metrics: not in `/api/config`, not in the API description.
-- The API description (`/api/openapi.json`, `/api/schemas/`) needs a login, and
-  there is no docs page, which would load its scripts from a CDN.
+- The API description (`/api/openapi.json`, `/api/schemas/`) needs a login or
+  a token. The reference page in the app (Scalar) is bundled into the binary, with
+  its telemetry, AI agent, proxy and web fonts switched off; the
+  Content-Security-Policy would block any call to its services anyway.
 - A failed link or coverage calculation shows a fixed reason; the error itself
   can name tile files, hosts or the storage bucket and goes to the log only.
   Coverage jobs do not report which worker (pod) computes them.
 - `/readyz` answers `not ready` without saying which part failed.
 - One user can hold at most five job event streams per process.
+
+## API tokens
+
+Programs such as a logbook use the API with a personal token instead of a
+password. The design follows from one question: what can a stolen token do?
+
+- **Only what it was given.** A token carries scopes per resource (read, or
+  read and write) and reaches nothing else; account settings, passwords and the
+  tokens themselves need a session, so a token can neither take over the account
+  nor mint more tokens. A request with an `Authorization` header is judged by the
+  token alone: a wrong token answers 401 and never falls back to a cookie.
+- **Not forever, unless chosen.** Every token has an expiration picked when it is
+  created; "never" is allowed but marked as such. Expired tokens stay listed for
+  30 days, so the owner sees why a program stopped working.
+- **Hard to get.** A token is 32 random bytes; the database keeps only its
+  SHA-256, like sessions, and the secret is shown once. Creating one needs the
+  account password, so a stolen session cannot leave a lasting token behind, and
+  the confirmed address gets a mail about every new token.
+- **Easy to notice and stop.** The token page shows when each token was last
+  used (updated at most once a minute) and revokes it at once. Changing the
+  password does not revoke tokens: programs keep working, and the list shows what
+  is still active. Revoking is manual on purpose; the admin panel leaves tokens
+  alone, and deleting a user deletes them.
+- **Limited like a login.** 20 bad tokens per IP in 15 minutes give 429 before
+  the database is asked, a valid token makes at most 300 requests per minute, and
+  maintenance mode stops tokens like it stops logins (503).
 
 ## Share links
 

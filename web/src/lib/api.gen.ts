@@ -11,12 +11,17 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The user's antennas */
+        /**
+         * The user's antennas
+         * @description API token scope: `antennas:read`.
+         */
         get: operations["list-antennas"];
         put?: never;
         /**
          * Describe a sector antenna by hand
          * @description Builds the usual sector shape: 12 (angle / beamwidth)² dB, capped at the front-to-back ratio.
+         *
+         *     API token scope: `antennas:write`.
          */
         post: operations["create-antenna"];
         delete?: never;
@@ -37,6 +42,8 @@ export interface paths {
         /**
          * Import an MSI Planet pattern file
          * @description The name falls back to the one in the file, then to the file name. A gain without a unit is read as dBd.
+         *
+         *     API token scope: `antennas:write`.
          */
         post: operations["import-antenna"];
         delete?: never;
@@ -56,12 +63,16 @@ export interface paths {
         /**
          * Replace a manual antenna
          * @description Links and coverages using the antenna take over the new gain and pattern. 409 for imported antennas.
+         *
+         *     API token scope: `antennas:write`.
          */
         put: operations["update-antenna"];
         post?: never;
         /**
          * Delete an antenna
          * @description Links and coverages using it become omnidirectional.
+         *
+         *     API token scope: `antennas:write`.
          */
         delete: operations["delete-antenna"];
         options?: never;
@@ -93,10 +104,16 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The user's coverages with their sites */
+        /**
+         * The user's coverages with their sites
+         * @description API token scope: `coverages:read`.
+         */
         get: operations["list-coverages"];
         put?: never;
-        /** Create a coverage */
+        /**
+         * Create a coverage
+         * @description API token scope: `coverages:write`.
+         */
         post: operations["create-coverage"];
         delete?: never;
         options?: never;
@@ -111,15 +128,23 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** One coverage with its job state and the rasters that can be shown on top */
+        /**
+         * One coverage with its job state and the rasters that can be shown on top
+         * @description API token scope: `coverages:read`.
+         */
         get: operations["get-coverage"];
         /**
          * Replace a coverage
          * @description Clears the computed result; the legend stays.
+         *
+         *     API token scope: `coverages:write`.
          */
         put: operations["update-coverage"];
         post?: never;
-        /** Delete a coverage */
+        /**
+         * Delete a coverage
+         * @description API token scope: `coverages:write`.
+         */
         delete: operations["delete-coverage"];
         options?: never;
         head?: never;
@@ -138,6 +163,8 @@ export interface paths {
         /**
          * Queue the coverage for computation
          * @description A job already queued or running stays as it is. GET /coverages/{id}/events streams the job state as server-sent events.
+         *
+         *     API token scope: `coverages:write`.
          */
         post: operations["compute-coverage"];
         delete?: never;
@@ -157,6 +184,8 @@ export interface paths {
         /**
          * Set the colours of a coverage
          * @description A cell takes the colour of the highest threshold its margin reaches. 1 to 8 bins; none resets to the default. Nothing is recomputed.
+         *
+         *     API token scope: `coverages:write`.
          */
         put: operations["set-coverage-legend"];
         post?: never;
@@ -177,10 +206,15 @@ export interface paths {
         /**
          * Publish a coverage read-only for 30 days, or extend it
          * @description An existing public URL is kept; its expiry moves to 30 days from now. The shared view shows the overlays of the saved map view.
+         *
+         *     API token scope: `coverages:write`.
          */
         put: operations["share-coverage"];
         post?: never;
-        /** Revoke the public URL of a coverage */
+        /**
+         * Revoke the public URL of a coverage
+         * @description API token scope: `coverages:write`.
+         */
         delete: operations["unshare-coverage"];
         options?: never;
         head?: never;
@@ -198,6 +232,8 @@ export interface paths {
         /**
          * Save how the map shows the coverage
          * @description Overlays that are not other computed coverages of the user are dropped. A shared view shows the map the same way.
+         *
+         *     API token scope: `coverages:write`.
          */
         put: operations["set-coverage-view"];
         post?: never;
@@ -214,10 +250,16 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The user's links with their sites */
+        /**
+         * The user's links with their sites
+         * @description API token scope: `links:read`.
+         */
         get: operations["list-links"];
         put?: never;
-        /** Create a link */
+        /**
+         * Create a link
+         * @description API token scope: `links:write`.
+         */
         post: operations["create-link"];
         delete?: never;
         options?: never;
@@ -235,12 +277,20 @@ export interface paths {
         /**
          * One link with its path analysis
          * @description Runs the analysis on every call; 60 analyses, reports and raster merges per user and minute.
+         *
+         *     API token scope: `links:read`.
          */
         get: operations["get-link"];
-        /** Replace a link */
+        /**
+         * Replace a link
+         * @description API token scope: `links:write`.
+         */
         put: operations["update-link"];
         post?: never;
-        /** Delete a link */
+        /**
+         * Delete a link
+         * @description API token scope: `links:write`.
+         */
         delete: operations["delete-link"];
         options?: never;
         head?: never;
@@ -258,10 +308,15 @@ export interface paths {
         /**
          * Publish a link read-only for 30 days, or extend it
          * @description An existing public URL is kept; its expiry moves to 30 days from now.
+         *
+         *     API token scope: `links:write`.
          */
         put: operations["share-link"];
         post?: never;
-        /** Revoke the public URL of a link */
+        /**
+         * Revoke the public URL of a link
+         * @description API token scope: `links:write`.
+         */
         delete: operations["unshare-link"];
         options?: never;
         head?: never;
@@ -275,7 +330,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The logged-in user */
+        /**
+         * The logged-in user
+         * @description API token scope: `account:read`.
+         */
         get: operations["get-me"];
         put?: never;
         post?: never;
@@ -296,6 +354,8 @@ export interface paths {
         /**
          * Change the address of the account
          * @description 202: a confirmation link went to the new address, which takes effect once it is opened; the old address gets a notice then. 204: the address is the same.
+         *
+         *     Needs a session; API tokens cannot call it.
          */
         put: operations["set-my-email"];
         post?: never;
@@ -316,10 +376,58 @@ export interface paths {
         /**
          * Change the password of the account
          * @description Logs out every session of the account and sets a fresh cookie for this one.
+         *
+         *     Needs a session; API tokens cannot call it.
          */
         put: operations["set-my-password"];
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/me/tokens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The user's API tokens, newest first
+         * @description Needs a session; API tokens cannot call it.
+         */
+        get: operations["list-my-tokens"];
+        put?: never;
+        /**
+         * Create an API token
+         * @description The answer carries the token itself, the only time it is shown. The confirmed address of the account gets a notice.
+         *
+         *     Needs a session; API tokens cannot call it.
+         */
+        post: operations["create-my-token"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/me/tokens/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke an API token
+         * @description Needs a session; API tokens cannot call it.
+         */
+        delete: operations["delete-my-token"];
         options?: never;
         head?: never;
         patch?: never;
@@ -467,10 +575,16 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The user's sites, ordered by name */
+        /**
+         * The user's sites, ordered by name
+         * @description API token scope: `sites:read`.
+         */
         get: operations["list-sites"];
         put?: never;
-        /** Create a site */
+        /**
+         * Create a site
+         * @description API token scope: `sites:write`.
+         */
         post: operations["create-site"];
         delete?: never;
         options?: never;
@@ -485,14 +599,22 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** One site */
+        /**
+         * One site
+         * @description API token scope: `sites:read`.
+         */
         get: operations["get-site"];
-        /** Replace a site */
+        /**
+         * Replace a site
+         * @description API token scope: `sites:write`.
+         */
         put: operations["update-site"];
         post?: never;
         /**
          * Delete a site
          * @description 409 while a link or coverage uses the site.
+         *
+         *     API token scope: `sites:write`.
          */
         delete: operations["delete-site"];
         options?: never;
@@ -817,6 +939,30 @@ export interface components {
             opacity: number;
             /** @description Other computed coverages merged into the map */
             overlays: number[];
+        };
+        CreatedToken: {
+            /** Format: date-time */
+            created_at: string;
+            /** @description Expired tokens stay listed for 30 days, then they are deleted */
+            expired: boolean;
+            /**
+             * Format: date-time
+             * @description Missing for a token that never expires
+             */
+            expires_at?: string;
+            /** Format: int64 */
+            id: number;
+            /**
+             * Format: date-time
+             * @description Missing until the token is used; updated at most once a minute
+             */
+            last_used_at?: string;
+            name: string;
+            /** @description The start of the token, to tell tokens apart */
+            prefix: string;
+            scopes: string[];
+            /** @description The token itself; it is shown only in this answer */
+            token: string;
         };
         EmailChangeInputBody: {
             email: string;
@@ -1332,6 +1478,18 @@ export interface components {
              */
             tx_tilt_deg?: number;
         };
+        NewTokenInput: {
+            /**
+             * Format: date-time
+             * @description Omit for a token that never expires
+             */
+            expires_at?: string;
+            name: string;
+            /** @description The password in use, so a stolen session cannot create a lasting token */
+            password: string;
+            /** @description A write scope includes the read scope of the same resource */
+            scopes: ("sites:read" | "sites:write" | "antennas:read" | "antennas:write" | "links:read" | "links:write" | "coverages:read" | "coverages:write" | "account:read")[];
+        };
         Overlay: {
             bounds: components["schemas"]["Bounds"];
             checked: boolean;
@@ -1407,6 +1565,28 @@ export interface components {
             lon: number;
             name: string;
         };
+        Token: {
+            /** Format: date-time */
+            created_at: string;
+            /** @description Expired tokens stay listed for 30 days, then they are deleted */
+            expired: boolean;
+            /**
+             * Format: date-time
+             * @description Missing for a token that never expires
+             */
+            expires_at?: string;
+            /** Format: int64 */
+            id: number;
+            /**
+             * Format: date-time
+             * @description Missing until the token is used; updated at most once a minute
+             */
+            last_used_at?: string;
+            name: string;
+            /** @description The start of the token, to tell tokens apart */
+            prefix: string;
+            scopes: string[];
+        };
         TokenInputBody: {
             /** @description The token from the mailed link */
             token: string;
@@ -1440,6 +1620,15 @@ export interface operations {
             };
             /** @description Unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1482,6 +1671,15 @@ export interface operations {
             };
             /** @description Unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1544,6 +1742,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ErrorModel"];
                 };
             };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
             /** @description Unprocessable Entity */
             422: {
                 headers: {
@@ -1590,6 +1797,15 @@ export interface operations {
             };
             /** @description Unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1646,6 +1862,15 @@ export interface operations {
             };
             /** @description Unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1729,6 +1954,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ErrorModel"];
                 };
             };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
             /** @description Internal Server Error */
             500: {
                 headers: {
@@ -1764,6 +1998,15 @@ export interface operations {
             };
             /** @description Unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1813,6 +2056,15 @@ export interface operations {
             };
             /** @description Unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1873,6 +2125,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ErrorModel"];
                 };
             };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
             /** @description Unprocessable Entity */
             422: {
                 headers: {
@@ -1920,6 +2181,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ErrorModel"];
                 };
             };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
             /** @description Unprocessable Entity */
             422: {
                 headers: {
@@ -1960,6 +2230,15 @@ export interface operations {
             };
             /** @description Unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2018,6 +2297,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ErrorModel"];
                 };
             };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
             /** @description Unprocessable Entity */
             422: {
                 headers: {
@@ -2067,6 +2355,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ErrorModel"];
                 };
             };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
             /** @description Unprocessable Entity */
             422: {
                 headers: {
@@ -2107,6 +2404,15 @@ export interface operations {
             };
             /** @description Unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2165,6 +2471,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ErrorModel"];
                 };
             };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
             /** @description Unprocessable Entity */
             422: {
                 headers: {
@@ -2205,6 +2520,15 @@ export interface operations {
             };
             /** @description Unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2254,6 +2578,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ErrorModel"];
                 };
             };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
             /** @description Unprocessable Entity */
             422: {
                 headers: {
@@ -2296,6 +2629,15 @@ export interface operations {
             };
             /** @description Unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2365,6 +2707,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ErrorModel"];
                 };
             };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
             /** @description Unprocessable Entity */
             422: {
                 headers: {
@@ -2405,6 +2756,15 @@ export interface operations {
             };
             /** @description Unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2461,6 +2821,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ErrorModel"];
                 };
             };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
             /** @description Unprocessable Entity */
             422: {
                 headers: {
@@ -2501,6 +2870,15 @@ export interface operations {
             };
             /** @description Unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2555,6 +2933,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ErrorModel"];
                 };
             };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
             /** @description Internal Server Error */
             500: {
                 headers: {
@@ -2588,6 +2975,15 @@ export interface operations {
             };
             /** @description Unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2647,6 +3043,178 @@ export interface operations {
             };
             /** @description Unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-my-tokens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Token"][];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "create-my-token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewTokenInput"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatedToken"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-my-token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3163,6 +3731,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ErrorModel"];
                 };
             };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
             /** @description Internal Server Error */
             500: {
                 headers: {
@@ -3198,6 +3775,15 @@ export interface operations {
             };
             /** @description Unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3247,6 +3833,15 @@ export interface operations {
             };
             /** @description Unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3307,6 +3902,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ErrorModel"];
                 };
             };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
             /** @description Unprocessable Entity */
             422: {
                 headers: {
@@ -3347,6 +3951,15 @@ export interface operations {
             };
             /** @description Unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

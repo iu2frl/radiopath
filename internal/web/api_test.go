@@ -20,6 +20,11 @@ var publicOps = map[string]bool{
 	"get-shared-link": true, "get-shared-coverage": true,
 }
 
+// Operations only a session may call: account settings and the API tokens themselves.
+var sessionOps = map[string]bool{
+	"set-my-email": true, "set-my-password": true, "list-my-tokens": true, "create-my-token": true, "delete-my-token": true,
+}
+
 func TestAPISecurity(t *testing.T) {
 	spec, err := (&Server{}).OpenAPI()
 	if err != nil {
@@ -39,6 +44,19 @@ func TestAPISecurity(t *testing.T) {
 		for method, o := range ops {
 			if public := publicOps[o.OperationID]; public == (len(o.Security) > 0) {
 				t.Errorf("%s %s (%s): public %v but security %v", method, path, o.OperationID, public, o.Security)
+			}
+			if publicOps[o.OperationID] {
+				continue
+			}
+			// API tokens reach every operation with a scope except the ones that need a session
+			var bearer []string
+			for _, req := range o.Security {
+				if sc, ok := req["bearer"]; ok {
+					bearer = sc
+				}
+			}
+			if sessionOps[o.OperationID] != (bearer == nil) || (bearer != nil && len(bearer) != 1) {
+				t.Errorf("%s %s (%s): session only %v but bearer scopes %v", method, path, o.OperationID, sessionOps[o.OperationID], bearer)
 			}
 		}
 	}
@@ -123,5 +141,40 @@ func TestStreamLimit(t *testing.T) {
 	s.closeStream(1)
 	if !s.openStream(1) {
 		t.Error("closed stream did not free its slot")
+	}
+}
+
+// An API token reaches what its scopes allow and nothing that needs a session; a session reaches everything.
+func TestTokenDenied(t *testing.T) {
+	tok := context.WithValue(context.Background(), tokenKey, &tokenAuth{id: 1, scopes: []string{scopeSitesRead}})
+	for _, c := range []struct {
+		ctx    context.Context
+		scope  string
+		denied bool
+	}{
+		{tok, scopeSitesRead, false},
+		{tok, scopeSitesWrite, true},
+		{tok, "", true},
+		{context.Background(), scopeSitesWrite, false},
+		{context.Background(), "", false},
+	} {
+		if got := tokenDenied(c.ctx, c.scope) != ""; got != c.denied {
+			t.Errorf("token %v, scope %q: denied %v, want %v", c.ctx.Value(tokenKey) != nil, c.scope, got, c.denied)
+		}
+	}
+}
+
+// Write scopes bring their read scope, unknown ones and an empty list are refused, the order is fixed.
+func TestParseScopes(t *testing.T) {
+	var c check
+	got := parseScopes(&c, []string{"links:write", "sites:read", "sites:read"})
+	if c.err() != nil || strings.Join(got, " ") != "sites:read links:read links:write" {
+		t.Errorf("parseScopes = %v, %v", got, c.err())
+	}
+	for _, in := range [][]string{nil, {"admin"}, {"session"}} {
+		var c check
+		if parseScopes(&c, in); c.err() == nil {
+			t.Errorf("parseScopes(%v) accepted", in)
+		}
 	}
 }

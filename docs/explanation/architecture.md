@@ -5,7 +5,7 @@ How the parts of Radiopath fit together and why they are arranged this way.
 ## One binary
 
 `cmd/radiopath` reads its configuration from the environment and starts, in one process, the HTTP server, the
-coverage workers (`RADIOPATH_WORKERS`), an hourly janitor (expired sessions, mail tokens and rate limit entries,
+coverage workers (`RADIOPATH_WORKERS`), an hourly janitor (expired sessions, mail tokens, API tokens expired for 30 days and rate limit entries,
 accounts never confirmed), and a second listener for
 Prometheus metrics. The same binary has a few subcommands: `openapi` prints the API description without a
 database, `useradd`, `userdel` and `users` manage accounts. Everything the server delivers is compiled in: database
@@ -21,8 +21,8 @@ queue), so any replica can serve any request.
 `internal/web/server.go` builds one `http.ServeMux`, wrapped in security headers, metrics and Go's
 `http.CrossOriginProtection` (which replaces CSRF tokens by checking `Sec-Fetch-Site` and `Origin`):
 
-- `/api/…` is the JSON API. A small middleware puts the session user and request details into the context, and
-  [huma](https://huma.rocks) handles validation, the OpenAPI description and the docs.
+- `/api/…` is the JSON API. A small middleware puts the caller (session user or API token) and request details
+  into the context, and [huma](https://huma.rocks) handles validation and the OpenAPI description.
 - Raster images, PDF reports and the job event stream are plain HTTP routes next to the API, because they return
   binary data or a stream.
 - `/s/…` serves share links: the page itself is the web app, its images and reports are rate limited per token.
@@ -42,8 +42,9 @@ turns it into TypeScript types for the web app, so server and client cannot drif
 Validation happens on the server: one 422 lists every invalid field. The web app only checks what the browser can
 know (a value that is no number) before sending.
 
-The scopes are the groundwork for personal API tokens, which will let third-party programs such as Wavelog use
-the API with limited rights.
+A session may call every operation with a scope. A personal API token, which lets other programs and scripts use
+the API, may call only the operations whose scope it was given, never those marked `scopeSession` (account
+settings, tokens); `gate` checks this for every operation, `requireUser` for the binary routes.
 
 ## Data and ownership
 

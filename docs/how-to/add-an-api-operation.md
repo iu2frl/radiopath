@@ -34,8 +34,8 @@ huma.Register(api, op("get-site-elevation", http.MethodGet, "/api/sites/{id}/ele
 ```
 
 - Always pass the owner, `userOf(ctx).ID`, to the store; that is what keeps other users' data out.
-- Read operations take the `…:read` scope, changes `…:write`. Operations a future API token must not call (password,
-  email) take `scopeSession`. An empty scope makes the operation public; add it to `publicOps` in
+- Read operations take the `…:read` scope, changes `…:write`. Operations an API token must not call (password,
+  email, tokens) take `scopeSession`; every other scoped operation is open to tokens with its scope. An empty scope makes the operation public; add it to `publicOps` in
   `internal/web/api_test.go`, or the test fails.
 - Errors: `s.storeErr(err)` turns `store.ErrNotFound` into 404 and logs anything unexpected as 500. Answer known
   cases with a specific message, for example `huma.Error409Conflict("Site is used by a link or coverage")`.
