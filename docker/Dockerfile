@@ -20,7 +20,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 
 FROM gcr.io/distroless/static:nonroot
 COPY --from=build /radiopath /radiopath
-ENV RADIOPATH_LISTEN=:8080 RADIOPATH_DEM_DIR=/data/dem
+ENV RADIOPATH_LISTEN=:8080 RADIOPATH_DATASET_DIR=/data
 EXPOSE 8080 9090
 USER nonroot
 ENTRYPOINT ["/radiopath"]

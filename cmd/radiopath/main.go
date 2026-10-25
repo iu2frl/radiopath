@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -67,8 +68,6 @@ type config struct {
 func loadConfig() (config, error) {
 	c := config{
 		databaseURL:   os.Getenv("DATABASE_URL"),
-		demDir:        os.Getenv("RADIOPATH_DEM_DIR"),
-		canopyDir:     os.Getenv("RADIOPATH_CANOPY_DIR"),
 		listen:        envOr("RADIOPATH_LISTEN", ":8080"),
 		metricsListen: ":9090",
 		redisURL:      os.Getenv("RADIOPATH_REDIS_URL"),
@@ -96,24 +95,8 @@ func loadConfig() (config, error) {
 	if c.adminToken != "" && len(c.adminToken) < minAdminToken {
 		return c, fmt.Errorf("RADIOPATH_ADMIN_TOKEN must be at least %d characters", minAdminToken)
 	}
-	c.s3 = s3.Client{
-		Endpoint:  os.Getenv("RADIOPATH_DEM_S3_ENDPOINT"),
-		Bucket:    os.Getenv("RADIOPATH_DEM_S3_BUCKET"),
-		Region:    envOr("RADIOPATH_DEM_S3_REGION", "us-east-1"),
-		AccessKey: os.Getenv("RADIOPATH_DEM_S3_ACCESS_KEY"),
-		SecretKey: os.Getenv("RADIOPATH_DEM_S3_SECRET_KEY"),
-	}
-	c.s3Prefix = os.Getenv("RADIOPATH_DEM_S3_PREFIX")
-	c.canopyPrefix = os.Getenv("RADIOPATH_CANOPY_S3_PREFIX")
-	switch {
-	case c.canopyPrefix != "" && c.s3.Bucket == "":
-		return c, errors.New("RADIOPATH_CANOPY_S3_PREFIX needs RADIOPATH_DEM_S3_BUCKET")
-	case c.s3.Bucket != "" && c.s3.Endpoint == "":
-		return c, errors.New("RADIOPATH_DEM_S3_ENDPOINT is required with RADIOPATH_DEM_S3_BUCKET")
-	case c.s3.Bucket != "" && (c.s3.AccessKey == "") != (c.s3.SecretKey == ""):
-		return c, errors.New("RADIOPATH_DEM_S3_ACCESS_KEY and RADIOPATH_DEM_S3_SECRET_KEY must be set together")
-	case c.s3.Bucket == "" && c.demDir == "":
-		return c, errors.New("RADIOPATH_DEM_DIR or RADIOPATH_DEM_S3_BUCKET is required")
+	if err := datasets(&c); err != nil {
+		return c, err
 	}
 	n, err := strconv.Atoi(envOr("RADIOPATH_DEM_CACHE_TILES", "8"))
 	if err != nil || n < 1 {
@@ -158,6 +141,62 @@ func loadConfig() (config, error) {
 		return c, errors.New("RADIOPATH_REGISTRATION needs RADIOPATH_SMTP_HOST: new accounts confirm their address by mail")
 	}
 	return c, nil
+}
+
+// replaced lists the dataset variables of earlier releases and what took their place; a server still configured
+// with one refuses to start rather than run without terrain.
+var replaced = [][2]string{
+	{"RADIOPATH_DEM_DIR", "RADIOPATH_DATASET_DIR"},
+	{"RADIOPATH_DEM_S3_ENDPOINT", "RADIOPATH_DATASET_S3_ENDPOINT"},
+	{"RADIOPATH_DEM_S3_BUCKET", "RADIOPATH_DATASET_S3_BUCKET"},
+	{"RADIOPATH_DEM_S3_PREFIX", "RADIOPATH_DATASET_DEM"},
+	{"RADIOPATH_DEM_S3_REGION", "RADIOPATH_DATASET_S3_REGION"},
+	{"RADIOPATH_DEM_S3_ACCESS_KEY", "RADIOPATH_DATASET_S3_ACCESS_KEY"},
+	{"RADIOPATH_DEM_S3_SECRET_KEY", "RADIOPATH_DATASET_S3_SECRET_KEY"},
+	{"RADIOPATH_CANOPY_DIR", "RADIOPATH_DATASET_CANOPY"},
+	{"RADIOPATH_CANOPY_S3_PREFIX", "RADIOPATH_DATASET_CANOPY"},
+}
+
+// datasets fills in where the terrain and canopy tiles are: one root, a directory or an S3 bucket, with a folder
+// (key prefix) per dataset. An empty RADIOPATH_DATASET_CANOPY, or a missing canopy folder, means no vegetation.
+func datasets(c *config) error {
+	for _, r := range replaced {
+		if _, ok := os.LookupEnv(r[0]); ok {
+			return fmt.Errorf("%s is no longer read; use %s (see docs/reference/configuration.md)", r[0], r[1])
+		}
+	}
+	demName := envOr("RADIOPATH_DATASET_DEM", "srtm1")
+	canopyName, ok := os.LookupEnv("RADIOPATH_DATASET_CANOPY")
+	if !ok {
+		canopyName = "canopy1"
+	}
+	c.s3 = s3.Client{
+		Endpoint:  os.Getenv("RADIOPATH_DATASET_S3_ENDPOINT"),
+		Bucket:    os.Getenv("RADIOPATH_DATASET_S3_BUCKET"),
+		Region:    envOr("RADIOPATH_DATASET_S3_REGION", "us-east-1"),
+		AccessKey: os.Getenv("RADIOPATH_DATASET_S3_ACCESS_KEY"),
+		SecretKey: os.Getenv("RADIOPATH_DATASET_S3_SECRET_KEY"),
+	}
+	root := os.Getenv("RADIOPATH_DATASET_DIR")
+	switch {
+	case c.s3.Bucket != "" && c.s3.Endpoint == "":
+		return errors.New("RADIOPATH_DATASET_S3_ENDPOINT is required with RADIOPATH_DATASET_S3_BUCKET")
+	case c.s3.Bucket != "" && (c.s3.AccessKey == "") != (c.s3.SecretKey == ""):
+		return errors.New("RADIOPATH_DATASET_S3_ACCESS_KEY and RADIOPATH_DATASET_S3_SECRET_KEY must be set together")
+	case c.s3.Bucket != "":
+		c.s3Prefix = demName + "/"
+		if canopyName != "" {
+			c.canopyPrefix = canopyName + "/"
+		}
+	case root == "":
+		return errors.New("RADIOPATH_DATASET_DIR or RADIOPATH_DATASET_S3_BUCKET is required")
+	default:
+		c.demDir = filepath.Join(root, demName)
+		if fi, err := os.Stat(filepath.Join(root, canopyName)); canopyName != "" && err == nil && fi.IsDir() {
+			c.canopyDir = filepath.Join(root, canopyName)
+		}
+	}
+	return nil
 }
 
 // envBool parses key as true/false, falling back to def when unset.

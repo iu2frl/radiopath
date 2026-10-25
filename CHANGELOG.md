@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The app and the admin panel send a Content-Security-Policy: scripts only from the app itself and its own inline scripts by hash, no plugins, no framing, no connections elsewhere (by @HB9HIL)
 
 ### Changed
+- **Breaking:** terrain and canopy tiles live under one dataset root, a directory (`RADIOPATH_DATASET_DIR`) or an S3 bucket (`RADIOPATH_DATASET_S3_*`), with one folder per dataset: `RADIOPATH_DATASET_DEM` (default `srtm1`) and `RADIOPATH_DATASET_CANOPY` (default `canopy1`, empty for none). `RADIOPATH_DEM_DIR`, `RADIOPATH_DEM_S3_*`, `RADIOPATH_CANOPY_DIR` and `RADIOPATH_CANOPY_S3_PREFIX` are no longer read and stop the server at startup; the images look in `/data/srtm1` instead of `/data/dem`. See the table in docs/reference/configuration.md; for development run `git -C tmp/testfiles pull` (by @HB9HIL)
 - The account page is split into the tabs Profile, Security, API tokens and API reference, each section with its explanation next to the form (by @HB9HIL)
 - Login, registration and the password pages share one centred layout that fits phones; apart from the login page they are not indexed by search engines (by @HB9HIL)
 - The web interface is a SvelteKit app embedded in the binary instead of server-rendered pages: no reload after saving, a coverage page picks up its finished job by itself. Page, share and mail link URLs stay the same; only the admin panel is still rendered by the server (by @HB9HIL)

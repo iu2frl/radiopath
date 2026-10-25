@@ -145,11 +145,11 @@ func TestS3Source(t *testing.T) {
 }
 
 func TestRealTile(t *testing.T) {
-	dir := os.Getenv("RADIOPATH_DEM_DIR")
-	if dir == "" {
-		t.Skip("RADIOPATH_DEM_DIR not set")
+	root := os.Getenv("RADIOPATH_DATASET_DIR")
+	if root == "" {
+		t.Skip("RADIOPATH_DATASET_DIR not set")
 	}
-	s := NewDirSource(dir, 2)
+	s := NewDirSource(filepath.Join(root, "srtm1"), 2)
 	h, err := s.Elevation(47.2494, 9.3432)
 	if err != nil {
 		t.Fatal(err)
@@ -218,11 +218,11 @@ func TestS3Canopy(t *testing.T) {
 }
 
 func TestRealCanopy(t *testing.T) {
-	dir := os.Getenv("RADIOPATH_CANOPY_DIR")
-	if dir == "" {
-		t.Skip("RADIOPATH_CANOPY_DIR not set")
+	root := os.Getenv("RADIOPATH_DATASET_DIR")
+	if root == "" {
+		t.Skip("RADIOPATH_DATASET_DIR not set")
 	}
-	s := NewDirCanopy(dir, 2)
+	s := NewDirCanopy(filepath.Join(root, "canopy1"), 2)
 	if h, err := s.HeightM(47.2494, 9.3432); err != nil || h > 3 {
 		t.Errorf("Saentis canopy = %.0f m, %v", h, err)
 	}

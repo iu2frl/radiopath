@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -15,11 +16,11 @@ import (
 )
 
 func TestRealSaentis(t *testing.T) {
-	dir := os.Getenv("RADIOPATH_DEM_DIR")
-	if dir == "" {
-		t.Skip("RADIOPATH_DEM_DIR not set")
+	root := os.Getenv("RADIOPATH_DATASET_DIR")
+	if root == "" {
+		t.Skip("RADIOPATH_DATASET_DIR not set")
 	}
-	c := coverage.Calculator{DEM: dem.NewDirSource(dir, 8)}
+	c := coverage.Calculator{DEM: dem.NewDirSource(filepath.Join(root, "srtm1"), 8)}
 	for _, rng := range []float64{30000, 60000} {
 		in := coverage.Input{
 			TX:        link.Site{Pos: geo.Point{Lat: 47.2494, Lon: 9.3432}, AntennaHeightM: 10},

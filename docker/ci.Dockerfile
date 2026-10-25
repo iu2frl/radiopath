@@ -4,7 +4,7 @@ FROM gcr.io/distroless/static:nonroot
 ARG TARGETARCH
 LABEL org.opencontainers.image.source=https://github.com/radiopath/radiopath
 COPY radiopath-linux-${TARGETARCH} /radiopath
-ENV RADIOPATH_LISTEN=:8080 RADIOPATH_DEM_DIR=/data/dem
+ENV RADIOPATH_LISTEN=:8080 RADIOPATH_DATASET_DIR=/data
 EXPOSE 8080 9090
 USER nonroot
 ENTRYPOINT ["/radiopath"]
