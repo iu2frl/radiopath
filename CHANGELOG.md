@@ -40,6 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Changing the address on a server without mail configured crashed the whole server; it now answers that mail is not configured, and a mail without a mailer is only logged (by @HB9HIL)
 - Registration no longer tells whether a user name or an address is taken: it answers the same in every case, and only the mail to that address says what happened. An unconfirmed registration no longer blocks its address for others (by @HB9HIL)
 - Mails of the public account pages go out in the background, so response times no longer tell whether an address exists (by @HB9HIL)
 - The login no longer follows a `next` parameter that the browser reads as another site, such as `/<tab>/evil.example` (by @HB9HIL)
