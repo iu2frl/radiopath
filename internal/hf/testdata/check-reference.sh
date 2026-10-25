@@ -5,7 +5,8 @@
 #   ITU_SOURCE_DIR  checkout of https://github.com/ITU-R-Study-Group-3/ITU-R-HF (P533/Src, P372/Src, ITURHFProp/Src)
 #   DATA_DIR        data set of scripts/fetch-hf-data.sh
 # Build flags are those of the upstream Linux Makefiles except -fcommon for -z muldefs, and MakeNoise.c in the noise
-# library (the Linux Makefile leaves it out, the Visual Studio project has it). The sources are not patched.
+# library (the Linux Makefile leaves it out, the Visual Studio project has it). errno.h is force-included because
+# MakeNoise.c uses errno without including its declaration. The sources are not patched.
 set -euo pipefail
 
 abs() { (cd "$1" && { pwd -W 2> /dev/null || pwd; }); }
@@ -23,7 +24,7 @@ CFLAGS=(-O2 -fPIC -fcommon -w)
 
 (
 	cd "$SRC"
-	gcc "${CFLAGS[@]}" -shared -o "$BUILD/$LIB372" P372/Src/P372/{InitializeNoise,Noise,NoiseMemory,MakeNoise}.c -IP372/Src/P372 -lm
+	gcc "${CFLAGS[@]}" -include errno.h -shared -o "$BUILD/$LIB372" P372/Src/P372/{InitializeNoise,Noise,NoiseMemory,MakeNoise}.c -IP372/Src/P372 -lm
 	gcc "${CFLAGS[@]}" -std=c99 -shared -o "$BUILD/$LIB533" P533/Src/P533/*.c -IP533/Src/P533 -lm -ldl
 	gcc "${CFLAGS[@]}" -o "$BUILD/$EXE" ITURHFProp/Src/ITURHFProp/*.c -IITURHFProp/Src/ITURHFProp -lm -ldl
 )

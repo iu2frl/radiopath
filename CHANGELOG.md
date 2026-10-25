@@ -45,6 +45,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The HF C reference check builds upstream `MakeNoise.c`, which uses `errno` without including its declaration (by @HB9HIL)
 - HF integration tests now look for the dataset in the directory populated by the CI fetch step (by @HB9HIL)
 - The HF reliability map now follows the prediction's long-path setting, and duplicate hours or frequencies are rejected before results are rendered (by @iu2frl)
 - Changing the address on a server without mail configured crashed the whole server; it now answers that mail is not configured, and a mail without a mailer is only logged (by @HB9HIL)
