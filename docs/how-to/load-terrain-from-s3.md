@@ -37,5 +37,5 @@ The ITU data of the HF model sits in the same bucket under `RADIOPATH_DATASET_HF
 on demand: at startup the server downloads all 25 files (about 131 MB) into a temporary directory, checks each
 against its SHA-256 in `internal/hf/data.sha256` and removes the directory on exit; keep that much room in `/tmp`.
 To fill the bucket, run `scripts/fetch-hf-data.sh` and copy the folder it creates, for example with
-`mc mirror tmp/testfiles/hf1 myminio/radiopath-datasets/hf1`. A bucket without the files leaves the HF model off
-(the server logs it); a file that does not match its checksum stops the server.
+`mc mirror tmp/testfiles/hf1 myminio/radiopath-datasets/hf1`. A bucket without the files, a file that does not match
+its checksum or a failed download leave the HF model off; the server logs it and runs without HF.

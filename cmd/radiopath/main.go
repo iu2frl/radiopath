@@ -277,7 +277,8 @@ func main() {
 
 // openHF opens the HF data set: its folder in the dataset directory, or the files under its key prefix in the S3
 // bucket, downloaded and verified into a temporary directory first (about 130 MB). The returned func removes that
-// directory. Without a folder, or with the files missing from the bucket, the HF model stays off and the result is nil.
+// directory. Without a folder, or with the files missing from the bucket, the HF model stays off and the result is nil;
+// an error also leaves it off, run only logs it so the rest of the app still starts.
 func openHF(ctx context.Context, cfg config, log *slog.Logger) (*hf.Data, func(), error) {
 	dir, cleanup := cfg.hfDir, func() {}
 	if cfg.s3.Bucket != "" && cfg.hfPrefix != "" {
@@ -302,6 +303,9 @@ func openHF(ctx context.Context, cfg config, log *slog.Logger) (*hf.Data, func()
 		return nil, cleanup, nil
 	}
 	d, err := hf.Open(dir, "")
+	if err == nil {
+		err = d.Ready()
+	}
 	if err != nil {
 		return nil, cleanup, fmt.Errorf("hf data: %w", err)
 	}
@@ -358,7 +362,7 @@ func run(ctx context.Context, cfg config, log *slog.Logger) error {
 	hfData, closeHF, err := openHF(ctx, cfg, log)
 	defer closeHF()
 	if err != nil {
-		return err
+		log.Error("hf data set unusable, the HF model is off", "err", err)
 	}
 	var sunspots *sunspot.Source
 	if hfData != nil && cfg.sunspotURL != "" {
