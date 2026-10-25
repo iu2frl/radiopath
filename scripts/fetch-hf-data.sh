@@ -2,7 +2,7 @@
 # Downloads the ITU-R data set of the HF model (P.533 / P.372) from the ITU-R Study Group 3 repository, pinned to one
 # commit and verified by SHA-256, so an upstream change can never alter the model silently. About 131 MB.
 # Usage:
-#   scripts/fetch-hf-data.sh [-f] [DIR]    # DIR defaults to RADIOPATH_HF_DIR from .env, else tmp/hf-data
+#   scripts/fetch-hf-data.sh [-f] [DATASET_DIR]    # into DATASET_DIR/hf1; DATASET_DIR defaults to RADIOPATH_DATASET_DIR from .env, else tmp/dataset
 # Files that already match their SHA-256 are skipped, -f downloads everything again.
 # To move to a newer upstream: change COMMIT, run with -f after replacing the hashes (sha256sum of the new files),
 # and run `go test ./internal/hf/...` against the result.
@@ -49,11 +49,12 @@ while getopts "f" opt; do
 done
 shift $((OPTIND - 1))
 
-DIR=${1:-}
-if [ -z "$DIR" ] && [ -r "$ROOT/.env" ]; then
-	DIR=$(sed -n 's/^RADIOPATH_HF_DIR=//p' "$ROOT/.env" | tail -1)
+DATASET=${1:-}
+if [ -z "$DATASET" ] && [ -r "$ROOT/.env" ]; then
+	DATASET=$(sed -n 's/^RADIOPATH_DATASET_DIR=//p' "$ROOT/.env" | tail -1)
 fi
-DIR=${DIR:-$ROOT/tmp/hf-data}
+DATASET=${DATASET:-$ROOT/tmp/dataset}
+DIR=$DATASET/hf1
 mkdir -p "$DIR"
 
 sha256() {
@@ -78,4 +79,4 @@ while IFS= read -r line; do
 	fi
 	mv -f "$file.part" "$file"
 done <<< "$FILES"
-echo "done: $DIR (set RADIOPATH_HF_DIR to this directory)"
+echo "done: $DIR (set RADIOPATH_DATASET_DIR to $DATASET)"

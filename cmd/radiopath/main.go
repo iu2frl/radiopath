@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -49,8 +50,8 @@ type config struct {
 	demCacheTiles int
 	canopyDir     string
 	canopyPrefix  string
-	hfDir         string
-	listen         string
+	datasetDir    string // holds the data sets in versioned subfolders, hf1/ for the HF model
+	listen        string
 	metricsListen string
 	logLevel      slog.Level
 	registration  bool
@@ -71,8 +72,8 @@ func loadConfig() (config, error) {
 		databaseURL:   os.Getenv("DATABASE_URL"),
 		demDir:        os.Getenv("RADIOPATH_DEM_DIR"),
 		canopyDir:     os.Getenv("RADIOPATH_CANOPY_DIR"),
-		hfDir:         os.Getenv("RADIOPATH_HF_DIR"),
-		listen:         envOr("RADIOPATH_LISTEN", ":8080"),
+		datasetDir:    os.Getenv("RADIOPATH_DATASET_DIR"),
+		listen:        envOr("RADIOPATH_LISTEN", ":8080"),
 		metricsListen: ":9090",
 		redisURL:      os.Getenv("RADIOPATH_REDIS_URL"),
 		tileURL:       envOr("RADIOPATH_TILE_URL", tiles.DefaultUpstream),
@@ -264,12 +265,13 @@ func run(ctx context.Context, cfg config, log *slog.Logger) error {
 		log.Info("canopy source", "dir", cfg.canopyDir)
 	}
 	var hfData *hf.Data
-	if cfg.hfDir != "" {
+	if cfg.datasetDir != "" {
 		var err error
-		if hfData, err = hf.Open(cfg.hfDir, ""); err != nil {
+		hfDir := filepath.Join(cfg.datasetDir, "hf1")
+		if hfData, err = hf.Open(hfDir, ""); err != nil {
 			return fmt.Errorf("hf data dir: %w", err)
 		}
-		log.Info("hf data", "dir", cfg.hfDir)
+		log.Info("hf data", "dir", hfDir)
 	}
 	srv := &web.Server{
 		Store:        st,
