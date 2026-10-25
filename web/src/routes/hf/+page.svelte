@@ -162,6 +162,7 @@
 			if (isNaN(year)) bad.push('Year: not a number');
 			if (isNaN(month)) bad.push('Month: not a number');
 			if (hours.some(isNaN)) bad.push('Hours: not a list of numbers');
+			if (new Set(hours).size !== hours.length) bad.push('Hours: remove duplicates');
 			return [{ year, month, hours }];
 		}
 		const a = monthIndex(v.range_start);
@@ -256,6 +257,7 @@
 		const when = periods(bad);
 		const freqs = list(v.frequencies_mhz);
 		if (freqs.some(isNaN)) bad.push('Frequencies: not a list of numbers');
+		if (new Set(freqs).size !== freqs.length) bad.push('Frequencies: remove duplicates');
 		if (bad.length) throw invalid(...bad);
 		return when.map((p) => ({
 			site_a_id: Number(v.site_a_id),
@@ -307,7 +309,8 @@
 						snr_percentile: b.snr_percentile,
 						noise_environment: b.noise_environment,
 						modulation: b.modulation,
-						digital: b.digital
+						digital: b.digital,
+						long_path: b.long_path
 					}
 				})
 			);

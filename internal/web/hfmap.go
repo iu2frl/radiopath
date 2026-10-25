@@ -40,6 +40,7 @@ type HFMapInput struct {
 	NoiseEnvironment string     `json:"noise_environment" enum:"city,residential,rural,quiet_rural,noisy,quiet" doc:"Man-made noise environment, ITU-R P.372"`
 	Modulation       string     `json:"modulation,omitempty" enum:"analog,digital" doc:"analog without a value"`
 	Digital          *HFDigital `json:"digital,omitempty" doc:"Digital modulation parameters; without them the defaults of the ITU program apply (required SIR 10 dB, all others 0)"`
+	LongPath         bool       `json:"long_path,omitempty" doc:"The long way round the globe instead of the short path"`
 }
 
 type HFMapFrame struct {
@@ -63,7 +64,7 @@ func hfMapRequest(in HFMapInput, site store.Site) (hf.Request, error) {
 		SiteAID: site.ID, SiteBID: site.ID + 1, Year: in.Year, Month: in.Month, HoursUTC: in.HoursUTC, SSN: in.SSN,
 		FrequenciesMHz: []float64{in.FrequencyMHz}, TxPowerDBW: in.TxPowerDBW, TxGainDBi: in.TxGainDBi, RxGainDBi: in.RxGainDBi,
 		BandwidthHz: in.BandwidthHz, RequiredSNRDB: in.RequiredSNRDB, SNRPercentile: in.SNRPercentile,
-		NoiseEnvironment: in.NoiseEnvironment, Modulation: in.Modulation, Digital: in.Digital,
+		NoiseEnvironment: in.NoiseEnvironment, Modulation: in.Modulation, Digital: in.Digital, LongPath: in.LongPath,
 	}
 	req, err := parseHF(pin, site, store.Site{ID: site.ID + 1})
 	if em, ok := err.(*huma.ErrorModel); ok {

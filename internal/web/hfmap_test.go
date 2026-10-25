@@ -62,6 +62,15 @@ func TestHFMapRequest(t *testing.T) {
 	if !ok || em.Status != 422 || len(em.Errors) != 1 || em.Errors[0].Location != "body.frequency_mhz" {
 		t.Errorf("want one error at body.frequency_mhz, got %v", err)
 	}
+	in = hfMapInput()
+	in.LongPath = true
+	req, err = hfMapRequest(in, site)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !req.LongPath {
+		t.Error("long path was not passed to the model request")
+	}
 }
 
 // TestHFMapCompute fills a frame per hour with a value for every cell; it needs the ITU data set

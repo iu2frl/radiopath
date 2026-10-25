@@ -1159,6 +1159,8 @@ export interface components {
             frequency_mhz: number;
             /** @description UTC hours, 1 to 24, at most 24 values; the map has one frame per hour */
             hours_utc: number[];
+            /** @description The long way round the globe instead of the short path */
+            long_path?: boolean;
             /**
              * @description analog without a value
              * @enum {string}
