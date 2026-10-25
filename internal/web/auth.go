@@ -154,6 +154,7 @@ type Me struct {
 	Name     string `json:"name"`
 	Email    string `json:"email" doc:"Empty until an address is confirmed"`
 	Verified bool   `json:"verified"`
+	Version  string `json:"version" doc:"Server version; only logged-in users see it"`
 }
 
 type MeOutput struct{ Body Me }
@@ -188,7 +189,7 @@ func (s *Server) registerAuth(api huma.API) {
 	huma.Register(api, op("get-me", http.MethodGet, "/api/me", scopeAccountRead, "The logged-in user"),
 		func(ctx context.Context, _ *struct{}) (*MeOutput, error) {
 			u := userOf(ctx)
-			return &MeOutput{Body: Me{Name: u.Name, Email: u.Email, Verified: u.Verified}}, nil
+			return &MeOutput{Body: Me{Name: u.Name, Email: u.Email, Verified: u.Verified, Version: s.Version}}, nil
 		})
 }
 

@@ -1270,6 +1270,8 @@ export interface components {
             email: string;
             name: string;
             verified: boolean;
+            /** @description Server version; only logged-in users see it */
+            version: string;
         };
         NameInputBody: {
             name: string;

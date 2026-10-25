@@ -36,7 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The login no longer follows a `next` parameter that the browser reads as another site, such as `/<tab>/evil.example` (by @HB9HIL)
 - Failed link and coverage calculations show a fixed reason instead of the internal error, which could name tile files, hosts or the storage bucket, also on shared pages; stored job errors are replaced by the migration (by @HB9HIL)
 - `/readyz` no longer names the failing part and its error, the log does (by @HB9HIL)
-- The version is no longer shown in the footer, `/api/config` or the API description (by @HB9HIL)
+- The version is shown to logged-in users only, in the footer and `/api/me`; `/api/config` and the API description no longer carry it (by @HB9HIL)
 - Share URLs with a made-up token answer 404 without leaving a rate limit row behind (by @HB9HIL)
 - The cookies that logout and admin logout clear are marked `Secure` (behind HTTPS) and `SameSite` like the ones they replace (by @HB9HIL)
 - A tab opened before a deploy loads the new version instead of failing on script chunks the new build no longer has (by @HB9HIL)

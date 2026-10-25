@@ -16,11 +16,14 @@ test('sends a guest to the login page and back', async ({ page }) => {
   await page.goto('/sites')
   await expect.poll(() => pathname(page)).toBe('/login')
   expect(new URL(page.url()).search).toBe('?next=%2Fsites')
+  // the version is for logged-in users only
+  await expect(page.locator('footer .font-mono')).toHaveCount(0)
   await page.locator('[name=name]').fill(user)
   await page.locator('[name=password]').fill(password)
   await page.locator('[name=password]').press('Enter')
   await expect.poll(() => pathname(page)).toBe('/sites')
   await expect(page.locator('header').getByRole('button', { name: user })).toBeVisible()
+  await expect(page.locator('footer .font-mono')).not.toBeEmpty()
 })
 
 test('stays on the site whatever next says', async ({ page }) => {

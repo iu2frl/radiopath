@@ -265,6 +265,7 @@ func run(ctx context.Context, cfg config, log *slog.Logger) error {
 		Registration: cfg.registration,
 		TrustProxy:   cfg.trustProxy,
 		AdminToken:   cfg.adminToken,
+		Version:      version,
 		BaseURL:      cfg.baseURL,
 		UI:           webui.FS(),
 		Log:          log,

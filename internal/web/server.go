@@ -47,6 +47,7 @@ type Server struct {
 	BaseURL      string
 	TrustProxy   bool
 	AdminToken   string
+	Version      string // shown to logged-in users only (/api/me)
 	Log          *slog.Logger
 	// UI holds the built SPA (webui.FS()), served for every path no route claims.
 	UI fs.FS

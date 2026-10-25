@@ -75,8 +75,8 @@ counted, so guessing leaves no rows behind. Behind an ingress set
 
 Public answers say as little about the installation as possible:
 
-- No version anywhere outside the log and the metrics: not in the footer, not
-  in `/api/config`, not in the API description.
+- The version only for logged-in users (footer, `/api/me`), besides the log and
+  the metrics: not in `/api/config`, not in the API description.
 - The API description (`/api/openapi.json`, `/api/schemas/`) needs a login, and
   there is no docs page, which would load its scripts from a CDN.
 - A failed link or coverage calculation shows a fixed reason; the error itself
