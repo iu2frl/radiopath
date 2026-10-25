@@ -43,8 +43,12 @@ ITU data set, and 404 for a site of another user. The body names the sites and t
 }
 ```
 
-At most 24 hours and 30 frequencies (1 to 30 MHz). Antennas are isotropic with `tx_gain_dbi` and `rx_gain_dbi`;
-`modulation` is `analog` or `digital` (with optional `digital` parameters), `long_path` takes the long way round the
+At most 24 hours and 30 frequencies (1 to 30 MHz). Antennas are isotropic with `tx_gain_dbi` and `rx_gain_dbi`, or
+the user's antennas (`tx_antenna_id`, `rx_antenna_id`, aimed with `tx_azimuth_deg`, `rx_azimuth_deg`, by default at
+the other end): the gain at a direction is the antenna's gain less the attenuation of its horizontal pattern (azimuth
+offset) and vertical pattern (elevation above the horizon), as for the links, so an antenna measured at VHF is only a
+rough model at HF. `modulation` is `analog` or `digital` (with optional `digital` parameters), `long_path` takes the
+long way round the
 globe. The answer has one entry in `points` per hour and frequency: MUFs, field strength, receiver power, noise,
 SNR, circuit reliability and the dominant mode with its delay, elevation and loss. The value -307 means that the
 quantity does not apply to the path.

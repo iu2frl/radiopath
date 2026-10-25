@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -474,5 +475,68 @@ func TestReady(t *testing.T) {
 	}
 	if err := d.Ready(); err == nil || !strings.Contains(err.Error(), "ionos07.bin") {
 		t.Errorf("got %v, want an error naming ionos07.bin", err)
+	}
+}
+
+// TestFunctionPattern checks the rotation of a pattern given as a function: the offset 0 lies at the bearing.
+func TestFunctionPattern(t *testing.T) {
+	gain := func(off, el float64) float64 { return off + el/100 }
+	ant, err := functionPattern(gain, 10.5*d2r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := ant.pattern[0][10][0]; got != 0 {
+		t.Errorf("main beam: got %v, want 0", got)
+	}
+	if got := ant.pattern[0][5][90]; got != 355.9 {
+		t.Errorf("offset 355 at elevation 90: got %v, want 355.9", got)
+	}
+	if _, err := functionPattern(func(_, _ float64) float64 { return math.NaN() }, 0); err == nil {
+		t.Error("NaN gain accepted")
+	}
+}
+
+// TestPatternAntennaMatchesIsotropic checks that a constant gain function gives the prediction of an isotropic
+// antenna with that gain, and that a directional one changes it.
+func TestPatternAntennaMatchesIsotropic(t *testing.T) {
+	dataDir, refDir := testDirs(t)
+	d, err := Open(dataDir, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := readCaseInput(t, filepath.Join(refDir, "case01.in"))
+	iso := req
+	iso.TxAntenna.GainOffset = 3
+	want, err := d.Predict(iso)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fn := req
+	fn.TxAntenna.Pattern = func(_, _ float64) float64 { return 3 }
+	got, err := d.Predict(fn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := range want.Points {
+		if got.Points[i].FieldStrength != want.Points[i].FieldStrength || got.Points[i].SNR != want.Points[i].SNR {
+			t.Fatalf("point %d differs from the isotropic antenna", i)
+		}
+	}
+
+	away := req
+	away.TxAntenna.Pattern = func(off, _ float64) float64 {
+		if off == 0 {
+			return 3
+		}
+		return -30
+	}
+	back := req
+	b := 180.0
+	back.TxAntenna.Bearing = &b
+	back.TxAntenna.Pattern = away.TxAntenna.Pattern
+	aimed, _ := d.Predict(away)
+	opposite, _ := d.Predict(back)
+	if aimed.Points[0].FieldStrength <= opposite.Points[0].FieldStrength {
+		t.Errorf("aimed %.1f dB not above the wrong way %.1f dB", aimed.Points[0].FieldStrength, opposite.Points[0].FieldStrength)
 	}
 }

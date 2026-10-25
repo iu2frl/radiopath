@@ -7,6 +7,7 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 
+	"github.com/radiopath/radiopath/internal/antenna"
 	"github.com/radiopath/radiopath/internal/hf"
 	"github.com/radiopath/radiopath/internal/store"
 )
@@ -49,8 +50,12 @@ type HFPredictionInput struct {
 	FrequenciesMHz []float64 `json:"frequencies_mhz" doc:"Frequencies, 1 to 30 MHz, at most 30 values"`
 
 	TxPowerDBW       float64    `json:"tx_power_dbw" doc:"Transmitter power in dB(1 kW), -30 to 60"`
-	TxGainDBi        float64    `json:"tx_gain_dbi,omitempty" doc:"Gain of an isotropic antenna at A"`
-	RxGainDBi        float64    `json:"rx_gain_dbi,omitempty" doc:"Gain of an isotropic antenna at B"`
+	TxGainDBi        float64    `json:"tx_gain_dbi,omitempty" doc:"Gain of an isotropic antenna at A; ignored with tx_antenna_id"`
+	RxGainDBi        float64    `json:"rx_gain_dbi,omitempty" doc:"Gain of an isotropic antenna at B; ignored with rx_antenna_id"`
+	TxAntennaID      *int64     `json:"tx_antenna_id,omitempty" doc:"Antenna at A: its gain and its horizontal and vertical pattern (elevation above the horizon) are used; isotropic without"`
+	TxAzimuthDeg     *float64   `json:"tx_azimuth_deg,omitempty" doc:"Main lobe azimuth at A; without it the antenna aims at B"`
+	RxAntennaID      *int64     `json:"rx_antenna_id,omitempty" doc:"Antenna at B, see tx_antenna_id"`
+	RxAzimuthDeg     *float64   `json:"rx_azimuth_deg,omitempty" doc:"Main lobe azimuth at B; without it the antenna aims at A"`
 	BandwidthHz      float64    `json:"bandwidth_hz" doc:"0.005 Hz to 3 MHz"`
 	RequiredSNRDB    float64    `json:"required_snr_db" doc:"Required signal-to-noise ratio, -30 to 200"`
 	SNRPercentile    int        `json:"snr_percentile" doc:"Share of the month, 1 to 99, for which snr_percentile_db is exceeded"`
@@ -112,6 +117,8 @@ func parseHF(in HFPredictionInput, a, b store.Site) (hf.Request, error) {
 	}
 	req.TxAntenna.GainOffset = c.num("tx_gain_dbi", "TX gain", in.TxGainDBi, -50, 60)
 	req.RxAntenna.GainOffset = c.num("rx_gain_dbi", "RX gain", in.RxGainDBi, -50, 60)
+	req.TxAntenna.Bearing = c.deg("tx_azimuth_deg", "TX azimuth", in.TxAzimuthDeg)
+	req.RxAntenna.Bearing = c.deg("rx_azimuth_deg", "RX azimuth", in.RxAzimuthDeg)
 
 	if len(in.HoursUTC) == 0 || len(in.HoursUTC) > maxHFHours {
 		c.add("hours_utc", "Hours: between 1 and 24 values")
@@ -158,6 +165,15 @@ func parseHF(in HFPredictionInput, a, b store.Site) (hf.Request, error) {
 	return req, c.err()
 }
 
+// hfPattern returns the gain in dBi of a stored antenna at an azimuth offset from its main lobe and an elevation above
+// the horizon: its gain less the attenuation of its patterns, as for the links.
+func hfPattern(a store.Antenna) func(azimuthOffset, elevation float64) float64 {
+	lobe := antenna.Lobe{H: a.PatternH, V: a.PatternV}
+	return func(azimuthOffset, elevation float64) float64 {
+		return a.GainDBi - lobe.AttenuationDB(azimuthOffset, elevation)
+	}
+}
+
 // finite returns v, or the "does not apply" value for NaN and infinities, which JSON cannot carry.
 func finite(v float64) float64 {
 	if math.IsNaN(v) || math.IsInf(v, 0) {
@@ -202,6 +218,19 @@ func (s *Server) registerHF(api huma.API) {
 		req, err := parseHF(in.Body, a, b)
 		if err != nil {
 			return nil, err
+		}
+		for _, e := range []struct {
+			id  *int64
+			dst *hf.Antenna
+		}{{in.Body.TxAntennaID, &req.TxAntenna}, {in.Body.RxAntennaID, &req.RxAntenna}} {
+			if e.id == nil {
+				continue
+			}
+			ant, err := s.Store.GetAntenna(ctx, owner, *e.id)
+			if err != nil {
+				return nil, s.storeErr(err)
+			}
+			e.dst.Pattern = hfPattern(ant)
 		}
 		res, err := s.HF.Predict(req)
 		if err != nil {

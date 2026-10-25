@@ -9,6 +9,7 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 
+	"github.com/radiopath/radiopath/internal/antenna"
 	"github.com/radiopath/radiopath/internal/hf"
 	"github.com/radiopath/radiopath/internal/store"
 )
@@ -123,5 +124,16 @@ func TestHFPredictionJSON(t *testing.T) {
 	}
 	if _, err := json.Marshal(out); err != nil {
 		t.Error(err)
+	}
+}
+
+// TestHFPattern gives the antenna's gain at the main lobe and its attenuation off it.
+func TestHFPattern(t *testing.T) {
+	g := hfPattern(store.Antenna{GainDBi: 9, PatternH: antenna.Sector(60, 20)})
+	if got := g(0, 0); got != 9 {
+		t.Errorf("gain on boresight %v, want 9", got)
+	}
+	if got := g(180, 0); got >= 9 {
+		t.Errorf("gain at the back %v, want below 9", got)
 	}
 }

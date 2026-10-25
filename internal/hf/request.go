@@ -68,7 +68,11 @@ type Antenna struct {
 	File       string   // path of a VOACAP type 11, 13 or 14 file
 	Data       []byte   // the content of such a file, used instead of File
 	GainOffset float64  // gain of the isotropic antenna (dBi)
-	Bearing    *float64 // main beam azimuth for type 13 (degrees); nil points at the other end
+	Bearing    *float64 // main beam azimuth for patterns and type 13 (degrees); nil points at the other end
+
+	// Pattern, when set, takes precedence over File and Data: the gain in dBi at an azimuth offset from the main
+	// beam (degrees, 0 to 359) and an elevation above the horizon (degrees, 0 to 90).
+	Pattern func(azimuthOffset, elevation float64) float64
 }
 
 // Request is the input of one prediction: one path in one month, for a list
@@ -136,6 +140,9 @@ func (r *Request) validate() error {
 // filled with the gain offset; files are read with the main beam at bearing
 // (radians), like ReadAntennaPatterns() of the C driver.
 func antennaPattern(a *Antenna, bearing float64) (*antenna, error) {
+	if a.Pattern != nil {
+		return functionPattern(a.Pattern, bearing)
+	}
 	if a.File == "" && len(a.Data) == 0 {
 		ant := new(antenna)
 		isotropicPattern(ant, a.GainOffset)

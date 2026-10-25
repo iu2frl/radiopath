@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - JSON API under `/api`, described by OpenAPI at `/api/openapi.json` with docs at `/api/docs`; the web app is built on it, other programs can use it too (by @HB9HIL)
-- HF propagation library `internal/hf`: Go port of ITU-R P.533-14 (MUF, field strength, SNR, circuit reliability) and P.372 radio noise, validated against the ITU reference implementation; reads the ITU data set from `RADIOPATH_HF_DIR` (download with `scripts/fetch-hf-data.sh`) and is served by `POST /api/hf/predictions` (by @iu2frl)
+- HF propagation library `internal/hf`: Go port of ITU-R P.533-14 (MUF, field strength, SNR, circuit reliability) and P.372 radio noise, validated against the ITU reference implementation; reads the ITU data set from `RADIOPATH_HF_DIR` (download with `scripts/fetch-hf-data.sh`) and is served by `POST /api/hf/predictions`, with isotropic antennas or the user's antenna patterns (by @iu2frl)
 - `/readyz` also checks that the HF data files are still present when `RADIOPATH_HF_DIR` is set (by @iu2frl)
 
 ### Changed
